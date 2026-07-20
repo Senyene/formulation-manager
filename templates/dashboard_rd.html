@@ -1,19 +1,320 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-xl font-bold mb-4">🧬 Formulas</h2>
-        <div class="bg-yellow-50 border border-yellow-200 p-4 rounded">
-            <p class="text-yellow-800">Formula management coming in Sprint 3</p>
+
+{% with messages = get_flashed_messages() %}
+    {% if messages %}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+            {{ messages[0] }}
         </div>
+    {% endif %}
+{% endwith %}
+
+<!-- TOP ROW: Create Formula + QC Feed -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    
+    <!-- Create New Formula -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold mb-4">🧬 Create New Formula</h2>
+        <form method="POST" action="{{ url_for('create_formula') }}">
+            <div class="mb-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Formula Code *</label>
+                <input type="text" name="code" required placeholder="e.g., F-102"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Formula Name *</label>
+                <input type="text" name="name" required placeholder="e.g., High-Gloss Clear Coat"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="mb-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Version</label>
+                <input type="text" name="version" value="1.0"
+                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold">
+                + Create Formula
+            </button>
+        </form>
     </div>
+    
+    <!-- QC Results Feed -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-xl font-bold mb-4">🔬 QC Results Feed</h2>
-        <p class="text-gray-500">No QC results linked to your formulas yet.</p>
+        {% if qc_feed %}
+        <div class="space-y-3 max-h-80 overflow-y-auto">
+            {% for test in qc_feed %}
+            <div class="border rounded p-3 {% if test.status == 'fail' %}border-red-200 bg-red-50{% else %}border-gray-200{% endif %}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-semibold">{{ test.formula.code if test.formula else 'N/A' }}</span>
+                        <span class="text-gray-500 text-sm">Batch: {{ test.batch_number }}</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-medium
+                        {% if test.status == 'pass' %}bg-green-100 text-green-800
+                        {% elif test.status == 'fail' %}bg-red-100 text-red-800
+                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                        {{ test.status.upper() }}
+                    </span>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">
+                    {{ test.test_date.strftime('%d-%b-%Y') if test.test_date else '' }} | Tester: {{ test.tested_by }}
+                </div>
+                {% if test.notes %}
+                <div class="text-xs text-gray-600 mt-1 italic">📝 {{ test.notes }}</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-4xl mb-2">📭</p>
+            <p>No QC results yet</p>
+        </div>
+        {% endif %}
     </div>
 </div>
-<div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-xl font-bold mb-4">🧱 Raw Materials</h2>
-    <p class="text-gray-500">Material management coming in Sprint 3</p>
+
+<!-- BOTTOM ROW: Formula Detail + Raw Materials -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    
+    <!-- Formula Management -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold mb-4">📋 My Formulas</h2>
+        
+        {% if formulas %}
+        <div class="space-y-4">
+            {% for formula in formulas %}
+            <div class="border rounded-lg p-4 {% if formula.status == 'approved' %}border-green-300 bg-green-50{% elif formula.status == 'archived' %}border-gray-300 bg-gray-50{% else %}border-blue-200{% endif %}">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <span class="font-bold text-lg">{{ formula.code }}</span>
+                        <span class="text-gray-600">- {{ formula.name }}</span>
+                        <span class="text-xs text-gray-400">v{{ formula.version }}</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-medium
+                        {% if formula.status == 'approved' %}bg-green-200 text-green-800
+                        {% elif formula.status == 'archived' %}bg-gray-300 text-gray-600
+                        {% else %}bg-blue-200 text-blue-800{% endif %}">
+                        {{ formula.status.upper() }}
+                    </span>
+                </div>
+                
+                <!-- Ingredients List -->
+                {% if formula.ingredients %}
+                <table class="w-full text-sm mb-3">
+                    <thead class="text-left text-gray-500">
+                        <tr>
+                            <th class="pb-1">Material</th>
+                            <th class="pb-1">Qty</th>
+                            <th class="pb-1">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ing in formula.ingredients %}
+                        <tr class="border-t">
+                            <td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td>
+                            <td class="py-1">{{ ing.quantity }} {{ ing.unit }}</td>
+                            <td class="py-1">
+                                <button onclick="document.getElementById('edit-ing-{{ ing.id }}').classList.toggle('hidden')" 
+                                        class="text-blue-500 text-xs hover:underline">Edit</button>
+                                <form method="POST" action="{{ url_for('remove_ingredient', ingredient_id=ing.id) }}" class="inline">
+                                    <button type="submit" class="text-red-500 text-xs hover:underline ml-2" 
+                                            onclick="return confirm('Remove this ingredient?')">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <!-- Edit Row (hidden by default) -->
+                        <tr id="edit-ing-{{ ing.id }}" class="hidden bg-yellow-50 border-t">
+                            <td colspan="3" class="py-2">
+                                <form method="POST" action="{{ url_for('update_ingredient', ingredient_id=ing.id) }}" class="flex gap-2 items-end">
+                                    <div>
+                                        <label class="text-xs text-gray-500">Quantity</label>
+                                        <input type="number" step="0.01" name="quantity" value="{{ ing.quantity }}" 
+                                               class="w-20 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500">Unit</label>
+                                        <input type="text" name="unit" value="{{ ing.unit }}" 
+                                               class="w-16 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-sm text-gray-400 mb-3">No ingredients added yet</p>
+                {% endif %}
+                
+                <!-- Add Ingredient Form -->
+                <form method="POST" action="{{ url_for('add_ingredient') }}" class="flex gap-2 items-end mt-2 pt-2 border-t">
+                    <input type="hidden" name="formula_id" value="{{ formula.id }}">
+                    <div class="flex-1">
+                        <select name="material_id" required class="w-full px-2 py-1 border rounded text-sm">
+                            <option value="">Select material...</option>
+                            {% for mat in materials %}
+                            <option value="{{ mat.id }}">{{ mat.code }} - {{ mat.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div>
+                        <input type="number" step="0.01" name="quantity" placeholder="Qty" required 
+                               class="w-20 px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <input type="text" name="unit" value="kg" 
+                               class="w-16 px-2 py-1 border rounded text-sm">
+                    </div>
+                    <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ Add</button>
+                </form>
+                
+                <!-- Status Change Buttons -->
+                <div class="flex gap-2 mt-3 pt-2 border-t">
+                    {% if formula.status == 'draft' %}
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                        <input type="hidden" name="status" value="approved">
+                        <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded text-xs">✅ Approve</button>
+                    </form>
+                    {% endif %}
+                    {% if formula.status == 'approved' %}
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                        <input type="hidden" name="status" value="archived">
+                        <button type="submit" class="bg-gray-500 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
+                    </form>
+                    {% endif %}
+                    {% if formula.status == 'archived' %}
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                        <input type="hidden" name="status" value="draft">
+                        <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📝 Reactivate</button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-4xl mb-2">🧪</p>
+            <p>No formulas created yet</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Raw Materials Management -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">🧱 Raw Materials</h2>
+            <button onclick="document.getElementById('newMaterialForm').classList.toggle('hidden')"
+                    class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
+                + New Material
+            </button>
+        </div>
+        
+        <!-- New Material Form (hidden by default) -->
+        <div id="newMaterialForm" class="hidden border border-green-200 rounded-lg p-4 mb-4 bg-green-50">
+            <h3 class="font-semibold mb-3 text-green-800">Add New Material</h3>
+            <form method="POST" action="{{ url_for('create_material') }}">
+                <div class="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Code *</label>
+                        <input type="text" name="code" required placeholder="e.g., RM-005"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Name *</label>
+                        <input type="text" name="name" required placeholder="Material name"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Supplier</label>
+                        <input type="text" name="supplier" placeholder="Supplier name"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Unit</label>
+                        <input type="text" name="unit" value="kg"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Cost/Unit</label>
+                        <input type="number" step="0.01" name="cost_per_unit" value="0"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-gray-600 mb-1">Stock Level</label>
+                        <input type="number" step="0.01" name="stock_level" value="0"
+                               class="w-full px-2 py-1 border rounded text-sm">
+                    </div>
+                </div>
+                <button type="submit" class="w-full bg-green-600 text-white py-1 rounded text-sm">Save Material</button>
+            </form>
+        </div>
+        
+        <!-- Materials List -->
+        {% if materials %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-3 py-2 text-left">Code</th>
+                        <th class="px-3 py-2 text-left">Name</th>
+                        <th class="px-3 py-2 text-left">Supplier</th>
+                        <th class="px-3 py-2 text-right">Stock</th>
+                        <th class="px-3 py-2 text-right">Cost/Unit</th>
+                        <th class="px-3 py-2">Edit</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for mat in materials %}
+                    <tr class="border-t hover:bg-gray-50">
+                        <td class="px-3 py-2 font-medium">{{ mat.code }}</td>
+                        <td class="px-3 py-2">{{ mat.name }}</td>
+                        <td class="px-3 py-2 text-gray-500">{{ mat.supplier or '-' }}</td>
+                        <td class="px-3 py-2 text-right">{{ mat.stock_level }} {{ mat.unit }}</td>
+                        <td class="px-3 py-2 text-right">${{ "%.2f"|format(mat.cost_per_unit|float) if mat.cost_per_unit else '0.00' }}</td>
+                        <td class="px-3 py-2 text-center">
+                            <button onclick="document.getElementById('edit-mat-{{ mat.id }}').classList.toggle('hidden')"
+                                    class="text-blue-500 text-xs hover:underline">Edit</button>
+                        </td>
+                    </tr>
+                    <!-- Edit Row (hidden) -->
+                    <tr id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50">
+                        <td colspan="6" class="px-3 py-2">
+                            <form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap">
+                                <div>
+                                    <label class="text-xs text-gray-500">Name</label>
+                                    <input type="text" name="name" value="{{ mat.name }}" class="w-32 px-2 py-1 border rounded text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500">Supplier</label>
+                                    <input type="text" name="supplier" value="{{ mat.supplier or '' }}" class="w-28 px-2 py-1 border rounded text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500">Unit</label>
+                                    <input type="text" name="unit" value="{{ mat.unit }}" class="w-16 px-2 py-1 border rounded text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500">Cost/Unit</label>
+                                    <input type="number" step="0.01" name="cost_per_unit" value="{{ mat.cost_per_unit or 0 }}" class="w-20 px-2 py-1 border rounded text-sm">
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500">Stock</label>
+                                    <input type="number" step="0.01" name="stock_level" value="{{ mat.stock_level }}" class="w-20 px-2 py-1 border rounded text-sm">
+                                </div>
+                                <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-400 text-center py-8">No materials created yet</p>
+        {% endif %}
+    </div>
 </div>
+
 {% endblock %}

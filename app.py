@@ -123,6 +123,18 @@ def dashboard():
         recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(10).all()
         return render_template(template, formulas=formulas, recent_tests=recent_tests)
     
+    elif current_user.role == 'rd':
+        formulas = Formula.query.order_by(Formula.created_at.desc()).all()
+        materials = RawMaterial.query.order_by(RawMaterial.name).all()
+        # Get QC results for all formulas
+        qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
+        return render_template(template, formulas=formulas, materials=materials, qc_feed=qc_feed)
+    
+    elif current_user.role == 'planner':
+        # Get consumption data from QC batches
+        qc_batches = QCTestResult.query.order_by(QCTestResult.test_date.desc()).all()
+        return render_template(template, qc_batches=qc_batches)
+    
     return render_template(template)
 
 # NEW: QC Submit Test Result
@@ -189,6 +201,166 @@ def submit_qc_result():
     db.session.commit()
     
     flash('✅ Test result submitted successfully!')
+    return redirect(url_for('dashboard'))
+
+# ============================================
+# R&D ROUTES
+# ============================================
+
+@app.route('/rd/create-formula', methods=['POST'])
+@login_required
+def create_formula():
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    code = request.form.get('code')
+    name = request.form.get('name')
+    version = request.form.get('version', '1.0')
+    
+    # Check if code already exists
+    existing = Formula.query.filter_by(code=code).first()
+    if existing:
+        flash('⚠️ Formula code already exists!')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula(
+        code=code,
+        name=name,
+        version=version,
+        status='draft',
+        created_by=current_user.display_name
+    )
+    db.session.add(formula)
+    db.session.commit()
+    
+    flash(f'✅ Formula {code} created successfully!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/add-ingredient', methods=['POST'])
+@login_required
+def add_ingredient():
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula_id = request.form.get('formula_id')
+    material_id = request.form.get('material_id')
+    quantity = request.form.get('quantity')
+    unit = request.form.get('unit', 'kg')
+    
+    # Check if ingredient already exists in formula
+    existing = FormulaIngredient.query.filter_by(
+        formula_id=formula_id, 
+        raw_material_id=material_id
+    ).first()
+    
+    if existing:
+        flash('⚠️ This material is already in the formula. Edit it instead.')
+        return redirect(url_for('dashboard'))
+    
+    ingredient = FormulaIngredient(
+        formula_id=formula_id,
+        raw_material_id=material_id,
+        quantity=float(quantity),
+        unit=unit
+    )
+    db.session.add(ingredient)
+    db.session.commit()
+    
+    flash('✅ Ingredient added to formula!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/update-ingredient/<int:ingredient_id>', methods=['POST'])
+@login_required
+def update_ingredient(ingredient_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    ingredient = FormulaIngredient.query.get_or_404(ingredient_id)
+    ingredient.quantity = float(request.form.get('quantity'))
+    ingredient.unit = request.form.get('unit', 'kg')
+    db.session.commit()
+    
+    flash('✅ Ingredient updated!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/remove-ingredient/<int:ingredient_id>', methods=['POST'])
+@login_required
+def remove_ingredient(ingredient_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    ingredient = FormulaIngredient.query.get_or_404(ingredient_id)
+    db.session.delete(ingredient)
+    db.session.commit()
+    
+    flash('🗑️ Ingredient removed from formula.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/update-formula-status/<int:formula_id>', methods=['POST'])
+@login_required
+def update_formula_status(formula_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get_or_404(formula_id)
+    new_status = request.form.get('status')
+    
+    if new_status in ['draft', 'approved', 'archived']:
+        formula.status = new_status
+        db.session.commit()
+        flash(f'✅ Formula {formula.code} is now {new_status.upper()}')
+    
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/create-material', methods=['POST'])
+@login_required
+def create_material():
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    code = request.form.get('code')
+    existing = RawMaterial.query.filter_by(code=code).first()
+    if existing:
+        flash('⚠️ Material code already exists!')
+        return redirect(url_for('dashboard'))
+    
+    material = RawMaterial(
+        code=code,
+        name=request.form.get('name'),
+        supplier=request.form.get('supplier'),
+        unit=request.form.get('unit', 'kg'),
+        cost_per_unit=float(request.form.get('cost_per_unit', 0)),
+        stock_level=float(request.form.get('stock_level', 0)),
+        created_by=current_user.display_name
+    )
+    db.session.add(material)
+    db.session.commit()
+    
+    flash(f'✅ Material {code} created!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/update-material/<int:material_id>', methods=['POST'])
+@login_required
+def update_material(material_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    material = RawMaterial.query.get_or_404(material_id)
+    material.name = request.form.get('name')
+    material.supplier = request.form.get('supplier')
+    material.unit = request.form.get('unit', 'kg')
+    material.cost_per_unit = float(request.form.get('cost_per_unit', 0))
+    material.stock_level = float(request.form.get('stock_level', 0))
+    db.session.commit()
+    
+    flash(f'✅ Material {material.code} updated!')
     return redirect(url_for('dashboard'))
 
 @app.route('/logout')
