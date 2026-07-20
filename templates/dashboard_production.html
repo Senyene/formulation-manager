@@ -2,6 +2,27 @@
 {% block content %}
 <div class="bg-white rounded-lg shadow p-6 mb-6">
     <h2 class="text-xl font-bold mb-4">🏭 Production Overview</h2>
-    <p class="text-gray-500">Production dashboard coming in Sprint 5.</p>
+    <div class="bg-blue-50 border border-blue-200 p-4 rounded mb-4">
+        <p class="text-blue-800 font-medium">📋 This dashboard will show planner's production schedule and QC results relevant to production.</p>
+        <p class="text-blue-600 text-sm mt-1">Full integration coming in Sprint 5.</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-lg shadow p-6">
+    <h2 class="text-xl font-bold mb-4">📊 Key Metrics</h2>
+    <div class="grid grid-cols-3 gap-4">
+        <div class="bg-gray-50 rounded p-4 text-center">
+            <p class="text-3xl font-bold text-gray-400">-</p>
+            <p class="text-sm text-gray-500">Batches Today</p>
+        </div>
+        <div class="bg-gray-50 rounded p-4 text-center">
+            <p class="text-3xl font-bold text-gray-400">-</p>
+            <p class="text-sm text-gray-500">Total Produced</p>
+        </div>
+        <div class="bg-gray-50 rounded p-4 text-center">
+            <p class="text-3xl font-bold text-gray-400">-</p>
+            <p class="text-sm text-gray-500">QC Pass Rate</p>
+        </div>
+    </div>
 </div>
 {% endblock %}

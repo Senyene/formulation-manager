@@ -75,6 +75,22 @@ class QCTestResult(db.Model):
     
     formula = db.relationship('Formula')
 
+# NEW: Production Batch model
+class ProductionBatch(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    formula_id = db.Column(db.Integer, db.ForeignKey('formula.id'), nullable=False)
+    batch_number = db.Column(db.String(50), nullable=False)
+    planned_date = db.Column(db.DateTime)
+    actual_date = db.Column(db.DateTime)
+    quantity_planned = db.Column(db.Float, default=0)
+    quantity_produced = db.Column(db.Float, default=0)
+    status = db.Column(db.String(20), default='planned')  # planned, in_progress, completed, cancelled
+    notes = db.Column(db.Text)
+    created_by = db.Column(db.String(80))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    formula = db.relationship('Formula')
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -132,8 +148,49 @@ def dashboard():
     
     elif current_user.role == 'planner':
         # Get consumption data from QC batches
+        import json
+        
+        # Calculate consumption from QC batches
+        consumption_data = {}
         qc_batches = QCTestResult.query.order_by(QCTestResult.test_date.desc()).all()
-        return render_template(template, qc_batches=qc_batches)
+        
+        for batch in qc_batches:
+            if batch.formula and batch.formula.ingredients:
+                for ingredient in batch.formula.ingredients:
+                    material = ingredient.material
+                    if material:
+                        key = f"{material.code}-{material.name}"
+                        if key not in consumption_data:
+                            consumption_data[key] = {
+                                'material_code': material.code,
+                                'material_name': material.name,
+                                'unit': ingredient.unit,
+                                'total_used': 0,
+                                'batch_count': 0,
+                                'batches': []
+                            }
+                        consumption_data[key]['total_used'] += ingredient.quantity
+                        consumption_data[key]['batch_count'] += 1
+                        consumption_data[key]['batches'].append({
+                            'batch_number': batch.batch_number,
+                            'formula_code': batch.formula.code,
+                            'quantity': ingredient.quantity,
+                            'date': batch.test_date.strftime('%d-%b-%Y') if batch.test_date else ''
+                        })
+        
+        # Production batches (for planning)
+        production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).all()
+        
+        # Get approved formulas for planning
+        approved_formulas = Formula.query.filter_by(status='approved').all()
+        
+        return render_template(
+            template, 
+            qc_batches=qc_batches,
+            consumption_data=consumption_data,
+            production_batches=production_batches,
+            approved_formulas=approved_formulas
+        )
     
     return render_template(template)
 
@@ -362,6 +419,107 @@ def update_material(material_id):
     
     flash(f'✅ Material {material.code} updated!')
     return redirect(url_for('dashboard'))
+
+# ============================================
+# PLANNER ROUTES
+# ============================================
+
+@app.route('/planner/create-batch', methods=['POST'])
+@login_required
+def create_production_batch():
+    if current_user.role != 'planner':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula_id = request.form.get('formula_id')
+    batch_number = request.form.get('batch_number')
+    planned_date = request.form.get('planned_date')
+    quantity_planned = request.form.get('quantity_planned')
+    notes = request.form.get('notes')
+    
+    # Check if batch number exists
+    existing = ProductionBatch.query.filter_by(batch_number=batch_number).first()
+    if existing:
+        flash('⚠️ Batch number already exists!')
+        return redirect(url_for('dashboard'))
+    
+    batch = ProductionBatch(
+        formula_id=formula_id,
+        batch_number=batch_number,
+        planned_date=datetime.strptime(planned_date, '%Y-%m-%d') if planned_date else datetime.utcnow(),
+        quantity_planned=float(quantity_planned) if quantity_planned else 0,
+        status='planned',
+        notes=notes,
+        created_by=current_user.display_name
+    )
+    db.session.add(batch)
+    db.session.commit()
+    
+    flash(f'✅ Production batch {batch_number} planned!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/planner/update-batch/<int:batch_id>', methods=['POST'])
+@login_required
+def update_production_batch(batch_id):
+    if current_user.role != 'planner':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    batch = ProductionBatch.query.get_or_404(batch_id)
+    
+    batch.quantity_produced = float(request.form.get('quantity_produced', 0))
+    new_status = request.form.get('status')
+    if new_status in ['planned', 'in_progress', 'completed', 'cancelled']:
+        batch.status = new_status
+        if new_status == 'completed':
+            batch.actual_date = datetime.utcnow()
+    
+    db.session.commit()
+    flash(f'✅ Batch {batch.batch_number} updated!')
+    return redirect(url_for('dashboard'))
+
+@app.route('/planner/export-consumption')
+@login_required
+def export_consumption():
+    if current_user.role != 'planner':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    import csv
+    import io
+    from flask import Response
+    
+    # Build CSV
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Material Code', 'Material Name', 'Total Used', 'Unit', 'Batch Count'])
+    
+    qc_batches = QCTestResult.query.all()
+    consumption = {}
+    for batch in qc_batches:
+        if batch.formula and batch.formula.ingredients:
+            for ing in batch.formula.ingredients:
+                if ing.material:
+                    key = ing.material.code
+                    if key not in consumption:
+                        consumption[key] = {
+                            'name': ing.material.name,
+                            'total': 0,
+                            'unit': ing.unit,
+                            'count': 0
+                        }
+                    consumption[key]['total'] += ing.quantity
+                    consumption[key]['count'] += 1
+    
+    for code, data in consumption.items():
+        writer.writerow([code, data['name'], data['total'], data['unit'], data['count']])
+    
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=consumption_report.csv"}
+    )
 
 @app.route('/logout')
 @login_required
