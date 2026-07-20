@@ -1,28 +1,146 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="bg-white rounded-lg shadow p-6 mb-6">
-    <h2 class="text-xl font-bold mb-4">🏭 Production Overview</h2>
-    <div class="bg-blue-50 border border-blue-200 p-4 rounded mb-4">
-        <p class="text-blue-800 font-medium">📋 This dashboard will show planner's production schedule and QC results relevant to production.</p>
-        <p class="text-blue-600 text-sm mt-1">Full integration coming in Sprint 5.</p>
+
+<!-- Page Header -->
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">🏭 Production Management</h1>
+    <span class="text-sm text-gray-500">Last updated: Now</span>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Batches Today</p>
+        <p class="text-2xl font-bold text-blue-600">{{ batches_today }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Total Planned</p>
+        <p class="text-2xl font-bold text-indigo-600">{{ "%.0f"|format(total_planned) }} kg</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Total Produced</p>
+        <p class="text-2xl font-bold text-green-600">{{ "%.0f"|format(total_produced) }} kg</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">QC Pass Rate</p>
+        <p class="text-2xl font-bold {% if qc_pass_rate >= 90 %}text-green-600{% elif qc_pass_rate >= 70 %}text-yellow-600{% else %}text-red-600{% endif %}">
+            {{ qc_pass_rate }}%
+        </p>
     </div>
 </div>
 
+<!-- Two Column Layout -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    
+    <!-- Production Schedule (from Planner) -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-bold mb-4">📅 Production Schedule</h2>
+        
+        {% if production_batches %}
+        <div class="space-y-3 max-h-96 overflow-y-auto">
+            {% for batch in production_batches %}
+            <div class="border rounded-lg p-3 {% if batch.status == 'completed' %}border-green-200 bg-green-50{% elif batch.status == 'cancelled' %}border-red-200 bg-red-50{% elif batch.status == 'in_progress' %}border-yellow-200 bg-yellow-50{% else %}border-gray-200{% endif %}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-semibold">{{ batch.batch_number }}</span>
+                        <span class="text-gray-500 text-sm ml-2">{{ batch.formula.code if batch.formula else 'N/A' }}</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-medium
+                        {% if batch.status == 'completed' %}bg-green-200 text-green-800
+                        {% elif batch.status == 'in_progress' %}bg-yellow-200 text-yellow-800
+                        {% elif batch.status == 'cancelled' %}bg-red-200 text-red-800
+                        {% else %}bg-blue-200 text-blue-800{% endif %}">
+                        {{ batch.status|upper|replace('_', ' ') }}
+                    </span>
+                </div>
+                <div class="grid grid-cols-3 gap-2 mt-2 text-xs text-gray-600">
+                    <div>
+                        <span class="text-gray-400">Planned:</span>
+                        <span class="font-medium">{{ "%.0f"|format(batch.quantity_planned) }} kg</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Produced:</span>
+                        <span class="font-medium">{{ "%.0f"|format(batch.quantity_produced or 0) }} kg</span>
+                    </div>
+                    <div>
+                        <span class="text-gray-400">Date:</span>
+                        <span class="font-medium">{{ batch.planned_date.strftime('%d-%b') if batch.planned_date else '-' }}</span>
+                    </div>
+                </div>
+                {% if batch.notes %}
+                <p class="text-xs text-gray-500 mt-1 italic">📝 {{ batch.notes }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-3xl mb-2">📅</p>
+            <p>No production schedule yet</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- QC Results Feed (from QC Lab) -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-bold mb-4">🔬 QC Lab Results Feed</h2>
+        
+        {% if qc_feed %}
+        <div class="space-y-3 max-h-96 overflow-y-auto">
+            {% for test in qc_feed %}
+            <div class="border rounded-lg p-3 {% if test.status == 'fail' %}border-red-300 bg-red-50{% else %}border-gray-200{% endif %}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-semibold">{{ test.batch_number }}</span>
+                        <span class="text-gray-500 text-sm ml-2">{{ test.formula.code if test.formula else 'N/A' }}</span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-medium
+                        {% if test.status == 'pass' %}bg-green-200 text-green-800
+                        {% elif test.status == 'fail' %}bg-red-200 text-red-800
+                        {% else %}bg-yellow-200 text-yellow-800{% endif %}">
+                        {{ test.status.upper() }}
+                    </span>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>📅 {{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '-' }}</span>
+                    <span>👤 {{ test.tested_by }}</span>
+                </div>
+                {% if test.status == 'fail' and test.notes %}
+                <p class="text-xs text-red-600 mt-1 font-medium">⚠️ {{ test.notes }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-8 text-gray-400">
+            <p class="text-3xl mb-2">🔬</p>
+            <p>No QC results yet</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Production Log (Quick Entry) -->
 <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-xl font-bold mb-4">📊 Key Metrics</h2>
-    <div class="grid grid-cols-3 gap-4">
-        <div class="bg-gray-50 rounded p-4 text-center">
-            <p class="text-3xl font-bold text-gray-400">-</p>
-            <p class="text-sm text-gray-500">Batches Today</p>
+    <h2 class="text-lg font-bold mb-4">📝 Production Notes</h2>
+    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <p class="text-yellow-800 text-sm">
+            <span class="font-semibold">ℹ️ Note:</span> 
+            Production log entries are managed by the Planner. Contact the planning team to update production status, 
+            quantities, or batch details. This view shows real-time data from QC Lab and Planning.
+        </p>
+    </div>
+    
+    <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+        <div class="bg-gray-50 rounded p-3">
+            <span class="font-medium text-gray-700">🔒 Restricted Data:</span>
+            <span class="text-gray-500">Formula compositions and raw material costs are hidden from this view.</span>
         </div>
-        <div class="bg-gray-50 rounded p-4 text-center">
-            <p class="text-3xl font-bold text-gray-400">-</p>
-            <p class="text-sm text-gray-500">Total Produced</p>
-        </div>
-        <div class="bg-gray-50 rounded p-4 text-center">
-            <p class="text-3xl font-bold text-gray-400">-</p>
-            <p class="text-sm text-gray-500">QC Pass Rate</p>
+        <div class="bg-gray-50 rounded p-3">
+            <span class="font-medium text-gray-700">👁️ Visible Data:</span>
+            <span class="text-gray-500">QC results, production schedules, batch statuses, and quantities.</span>
         </div>
     </div>
 </div>
+
 {% endblock %}

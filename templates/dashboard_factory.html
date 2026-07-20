@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Page Header -->
+<div class="flex justify-between items-center mb-6">
+    <h1 class="text-2xl font-bold text-gray-800">🏗️ Factory Operations Overview</h1>
+    <span class="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full">Aggregated View</span>
+</div>
+
+<!-- Top KPI Row -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Total QC Tests</p>
+        <p class="text-2xl font-bold text-blue-600">{{ total_qc_tests }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Passed QC</p>
+        <p class="text-2xl font-bold text-green-600">{{ passed_qc }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Failed QC</p>
+        <p class="text-2xl font-bold {% if failed_qc > 0 %}text-red-600{% else %}text-gray-600{% endif %}">{{ failed_qc }}</p>
+    </div>
+    <div class="bg-white rounded-lg shadow p-4">
+        <p class="text-sm text-gray-500">Production Efficiency</p>
+        <p class="text-2xl font-bold {% if efficiency >= 90 %}text-green-600{% elif efficiency >= 75 %}text-yellow-600{% else %}text-red-600{% endif %}">
+            {{ efficiency }}%
+        </p>
+    </div>
+</div>
+
+<!-- Two Column Layout -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+    
+    <!-- QC Summary (Aggregated - no formula details) -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold">🔬 Quality Control Summary</h2>
+            <span class="text-xs text-gray-400">Last {{ qc_summary|length }} results</span>
+        </div>
+        
+        {% if qc_summary %}
+        <div class="space-y-2 max-h-80 overflow-y-auto">
+            {% for test in qc_summary %}
+            <div class="flex justify-between items-center border-b border-gray-100 pb-2">
+                <div>
+                    <span class="font-medium text-sm">{{ test.batch_number }}</span>
+                    <span class="text-gray-400 text-xs ml-2">
+                        {{ test.test_date.strftime('%d-%b-%Y') if test.test_date else '-' }}
+                    </span>
+                </div>
+                <span class="text-xs px-2 py-1 rounded font-medium
+                    {% if test.status == 'pass' %}bg-green-100 text-green-800
+                    {% elif test.status == 'fail' %}bg-red-100 text-red-800
+                    {% else %}bg-yellow-100 text-yellow-800{% endif %}">
+                    {{ test.status.upper() }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-6 text-gray-400">
+            <p>No QC data available</p>
+        </div>
+        {% endif %}
+        
+        <div class="mt-4 pt-3 border-t">
+            <div class="flex justify-between text-sm">
+                <span class="text-gray-500">Pass Rate:</span>
+                <span class="font-semibold {% if total_qc_tests > 0 and (passed_qc/total_qc_tests*100) >= 90 %}text-green-600{% else %}text-yellow-600{% endif %}">
+                    {% if total_qc_tests > 0 %}{{ "%.0f"|format(passed_qc/total_qc_tests*100) }}{% else %}0{% endif %}%
+                </span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Production Status (Aggregated - no formula details) -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-bold">📦 Production Status</h2>
+            <span class="text-xs text-gray-400">Active batches</span>
+        </div>
+        
+        {% if production_batches %}
+        <div class="space-y-3 max-h-80 overflow-y-auto">
+            {% for batch in production_batches %}
+            <div class="border rounded-lg p-3 {% if batch.status == 'completed' %}border-green-200{% elif batch.status == 'in_progress' %}border-yellow-200{% elif batch.status == 'cancelled' %}border-red-200{% else %}border-gray-200{% endif %}">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <span class="font-semibold text-sm">{{ batch.batch_number }}</span>
+                        <span class="text-gray-400 text-xs ml-2">
+                            {{ batch.planned_date.strftime('%d-%b') if batch.planned_date else '-' }}
+                        </span>
+                    </div>
+                    <span class="text-xs px-2 py-1 rounded font-medium
+                        {% if batch.status == 'completed' %}bg-green-200 text-green-800
+                        {% elif batch.status == 'in_progress' %}bg-yellow-200 text-yellow-800
+                        {% elif batch.status == 'cancelled' %}bg-red-200 text-red-800
+                        {% else %}bg-blue-200 text-blue-800{% endif %}">
+                        {{ batch.status|upper|replace('_', ' ') }}
+                    </span>
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>Planned: {{ "%.0f"|format(batch.quantity_planned) }} kg</span>
+                    <span>Actual: {{ "%.0f"|format(batch.quantity_produced or 0) }} kg</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-6 text-gray-400">
+            <p>No production data</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stock Alerts & Restrictions Notice -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    
+    <!-- Low Stock Alerts -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-bold mb-4">⚠️ Low Stock Alerts</h2>
+        
+        {% if low_stock_materials %}
+        <div class="space-y-2">
+            {% for mat in low_stock_materials %}
+            <div class="flex justify-between items-center border rounded p-3 
+                        {% if mat.stock_level < 20 %}bg-red-50 border-red-200{% elif mat.stock_level < 50 %}bg-yellow-50 border-yellow-200{% else %}bg-gray-50 border-gray-200{% endif %}">
+                <div>
+                    <span class="font-medium text-sm">{{ mat.code }}</span>
+                    <span class="text-gray-500 text-sm ml-2">{{ mat.name }}</span>
+                </div>
+                <span class="font-bold text-sm 
+                            {% if mat.stock_level < 20 %}text-red-600
+                            {% elif mat.stock_level < 50 %}text-yellow-600
+                            {% else %}text-gray-600{% endif %}">
+                    {{ mat.stock_level }} {{ mat.unit }}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-6 text-gray-400">
+            <p class="text-green-500 text-2xl mb-1">✅</p>
+            <p>All materials adequately stocked</p>
+        </div>
+        {% endif %}
+    </div>
+    
+    <!-- Data Access Notice -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-bold mb-4">🔒 Access Restrictions</h2>
+        
+        <div class="space-y-3 text-sm">
+            <div class="flex items-start gap-3 bg-red-50 rounded p-3">
+                <span class="text-red-500 text-lg">🚫</span>
+                <div>
+                    <p class="font-medium text-red-800">Hidden Data</p>
+                    <p class="text-red-600">Formula compositions, raw material costs, supplier pricing</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3 bg-green-50 rounded p-3">
+                <span class="text-green-500 text-lg">✅</span>
+                <div>
+                    <p class="font-medium text-green-800">Visible Data</p>
+                    <p class="text-green-600">Production schedules, QC pass/fail status, stock levels, batch quantities</p>
+                </div>
+            </div>
+            <div class="flex items-start gap-3 bg-blue-50 rounded p-3">
+                <span class="text-blue-500 text-lg">📊</span>
+                <div>
+                    <p class="font-medium text-blue-800">Aggregated Only</p>
+                    <p class="text-blue-600">QC results show pass/fail only (no individual parameters). Production data shows batch numbers and quantities (no formula breakdown).</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -192,6 +192,69 @@ def dashboard():
             approved_formulas=approved_formulas
         )
     
+    elif current_user.role == 'production':
+        # Production sees: QC feed, planner schedule, but NOT formula details or costs
+        qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(15).all()
+        production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).all()
+        
+        # Calculate production metrics
+        total_produced = sum(b.quantity_produced or 0 for b in production_batches if b.status == 'completed')
+        total_planned = sum(b.quantity_planned or 0 for b in production_batches)
+        batches_today = len([b for b in production_batches 
+                           if b.planned_date and b.planned_date.date() == datetime.utcnow().date()])
+        qc_pass_rate = 0
+        if qc_feed:
+            passed = len([t for t in qc_feed if t.status == 'pass'])
+            qc_pass_rate = round((passed / len(qc_feed)) * 100)
+        
+        return render_template(
+            template,
+            qc_feed=qc_feed,
+            production_batches=production_batches,
+            total_produced=total_produced,
+            total_planned=total_planned,
+            batches_today=batches_today,
+            qc_pass_rate=qc_pass_rate
+        )
+    
+    elif current_user.role == 'factory':
+        # Factory sees: aggregated operational data, NO formula compositions, NO costs
+        import json
+        
+        # Production summary (hide formula details, show only codes)
+        production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).limit(20).all()
+        qc_summary = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
+        
+        # Aggregate QC stats (pass/fail counts, hide individual parameters)
+        total_qc_tests = len(qc_summary)
+        passed_qc = len([t for t in qc_summary if t.status == 'pass'])
+        failed_qc = len([t for t in qc_summary if t.status == 'fail'])
+        
+        # Production efficiency
+        completed_batches = [b for b in production_batches if b.status == 'completed']
+        efficiency = 0
+        if completed_batches:
+            efficiencies = []
+            for b in completed_batches:
+                if b.quantity_planned and b.quantity_planned > 0:
+                    efficiencies.append((b.quantity_produced or 0) / b.quantity_planned * 100)
+            if efficiencies:
+                efficiency = round(sum(efficiencies) / len(efficiencies))
+        
+        # Material stock alerts (low stock)
+        low_stock_materials = RawMaterial.query.filter(RawMaterial.stock_level < 100).all()
+        
+        return render_template(
+            template,
+            production_batches=production_batches,
+            qc_summary=qc_summary,
+            total_qc_tests=total_qc_tests,
+            passed_qc=passed_qc,
+            failed_qc=failed_qc,
+            efficiency=efficiency,
+            low_stock_materials=low_stock_materials
+        )
+
     return render_template(template)
 
 # NEW: QC Submit Test Result
@@ -555,7 +618,7 @@ def init_db():
                 RawMaterial(code='RM-001', name='Epoxy Resin A', supplier='ChemSupply Co', unit='kg', cost_per_unit=12.50, stock_level=500, created_by='system'),
                 RawMaterial(code='RM-002', name='Hardener B', supplier='ChemSupply Co', unit='kg', cost_per_unit=8.75, stock_level=300, created_by='system'),
                 RawMaterial(code='RM-003', name='Pigment Red', supplier='ColorTech Ltd', unit='kg', cost_per_unit=25.00, stock_level=50, created_by='system'),
-                RawMaterial(code='RM-004', name='Filler Silica', supplier='MineralPro', unit='kg', cost_per_unit=3.20, stock_level=1000, created_by='system'),
+                RawMaterial(code='RM-004', name='Filler Silica', supplier='MineralPro', unit='kg', cost_per_unit=3.20, stock_level=45, created_by='system'),
             ]
             db.session.add_all(materials)
             db.session.commit()
