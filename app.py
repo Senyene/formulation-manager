@@ -1,8 +1,11 @@
-from flask import Flask, render_template, redirect, url_for, request, flash
+from flask import Flask, render_template, redirect, url_for, request, flash, Response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
+import json
+import csv
+import io
 import os
 
 # Initialize the app
@@ -27,7 +30,6 @@ class User(UserMixin, db.Model):
     role = db.Column(db.String(20), nullable=False)
     display_name = db.Column(db.String(100), nullable=False)
 
-# NEW: Raw Materials table
 class RawMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(20), unique=True, nullable=False)
@@ -39,18 +41,16 @@ class RawMaterial(db.Model):
     created_by = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-# NEW: Formulas table
 class Formula(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     code = db.Column(db.String(20), unique=True, nullable=False)
     name = db.Column(db.String(200), nullable=False)
     version = db.Column(db.String(10), default='1.0')
-    status = db.Column(db.String(20), default='draft')  # draft, approved, archived
+    status = db.Column(db.String(20), default='draft')
     created_by = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     ingredients = db.relationship('FormulaIngredient', backref='formula', lazy=True)
 
-# NEW: Formula Ingredients (links formulas to raw materials)
 class FormulaIngredient(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     formula_id = db.Column(db.Integer, db.ForeignKey('formula.id'), nullable=False)
@@ -59,23 +59,17 @@ class FormulaIngredient(db.Model):
     unit = db.Column(db.String(20), default='kg')
     material = db.relationship('RawMaterial')
 
-# NEW: QC Test Results table
 class QCTestResult(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     formula_id = db.Column(db.Integer, db.ForeignKey('formula.id'), nullable=False)
     batch_number = db.Column(db.String(50), nullable=False)
     test_date = db.Column(db.DateTime, default=datetime.utcnow)
     tested_by = db.Column(db.String(80))
-    
-    # Flexible parameters - we'll store as JSON string for flexibility
-    parameters = db.Column(db.Text)  # JSON string: [{"name":"Viscosity","result":"1500","unit":"cP","spec":"1400-1600","pass":true}]
-    
-    status = db.Column(db.String(20), default='pending')  # pass, fail, pending
+    parameters = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending')
     notes = db.Column(db.Text)
-    
     formula = db.relationship('Formula')
 
-# NEW: Production Batch model
 class ProductionBatch(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     formula_id = db.Column(db.Integer, db.ForeignKey('formula.id'), nullable=False)
@@ -84,11 +78,10 @@ class ProductionBatch(db.Model):
     actual_date = db.Column(db.DateTime)
     quantity_planned = db.Column(db.Float, default=0)
     quantity_produced = db.Column(db.Float, default=0)
-    status = db.Column(db.String(20), default='planned')  # planned, in_progress, completed, cancelled
+    status = db.Column(db.String(20), default='planned')
     notes = db.Column(db.Text)
     created_by = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
     formula = db.relationship('Formula')
 
 @login_manager.user_loader
@@ -133,24 +126,27 @@ def dashboard():
     }
     template = role_templates.get(current_user.role, 'login.html')
     
-    # Pass data specific to each role
+    # ============================================
+    # QC ROLE
+    # ============================================
     if current_user.role == 'qc':
         formulas = Formula.query.filter_by(status='approved').all()
         recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(10).all()
         return render_template(template, formulas=formulas, recent_tests=recent_tests)
     
+    # ============================================
+    # R&D ROLE
+    # ============================================
     elif current_user.role == 'rd':
         formulas = Formula.query.order_by(Formula.created_at.desc()).all()
         materials = RawMaterial.query.order_by(RawMaterial.name).all()
-        # Get QC results for all formulas
         qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         return render_template(template, formulas=formulas, materials=materials, qc_feed=qc_feed)
     
+    # ============================================
+    # PLANNER ROLE
+    # ============================================
     elif current_user.role == 'planner':
-        # Get consumption data from QC batches
-        import json
-        
-        # Calculate consumption from QC batches
         consumption_data = {}
         qc_batches = QCTestResult.query.order_by(QCTestResult.test_date.desc()).all()
         
@@ -178,29 +174,27 @@ def dashboard():
                             'date': batch.test_date.strftime('%d-%b-%Y') if batch.test_date else ''
                         })
         
-        # Production batches (for planning)
         production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).all()
-        
-        # Get approved formulas for planning
         approved_formulas = Formula.query.filter_by(status='approved').all()
         
         return render_template(
-            template, 
+            template,
             qc_batches=qc_batches,
             consumption_data=consumption_data,
             production_batches=production_batches,
             approved_formulas=approved_formulas
         )
     
+    # ============================================
+    # PRODUCTION MANAGER ROLE
+    # ============================================
     elif current_user.role == 'production':
-        # Production sees: QC feed, planner schedule, but NOT formula details or costs
         qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(15).all()
         production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).all()
         
-        # Calculate production metrics
         total_produced = sum(b.quantity_produced or 0 for b in production_batches if b.status == 'completed')
         total_planned = sum(b.quantity_planned or 0 for b in production_batches)
-        batches_today = len([b for b in production_batches 
+        batches_today = len([b for b in production_batches
                            if b.planned_date and b.planned_date.date() == datetime.utcnow().date()])
         qc_pass_rate = 0
         if qc_feed:
@@ -217,20 +211,17 @@ def dashboard():
             qc_pass_rate=qc_pass_rate
         )
     
+    # ============================================
+    # FACTORY MANAGER ROLE
+    # ============================================
     elif current_user.role == 'factory':
-        # Factory sees: aggregated operational data, NO formula compositions, NO costs
-        import json
-        
-        # Production summary (hide formula details, show only codes)
         production_batches = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).limit(20).all()
         qc_summary = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         
-        # Aggregate QC stats (pass/fail counts, hide individual parameters)
         total_qc_tests = len(qc_summary)
         passed_qc = len([t for t in qc_summary if t.status == 'pass'])
         failed_qc = len([t for t in qc_summary if t.status == 'fail'])
         
-        # Production efficiency
         completed_batches = [b for b in production_batches if b.status == 'completed']
         efficiency = 0
         if completed_batches:
@@ -241,7 +232,6 @@ def dashboard():
             if efficiencies:
                 efficiency = round(sum(efficiencies) / len(efficiencies))
         
-        # Material stock alerts (low stock)
         low_stock_materials = RawMaterial.query.filter(RawMaterial.stock_level < 100).all()
         
         return render_template(
@@ -254,10 +244,106 @@ def dashboard():
             efficiency=efficiency,
             low_stock_materials=low_stock_materials
         )
-
+    
+    # ============================================
+    # AUDIT ROLE
+    # ============================================
+    elif current_user.role == 'audit':
+        qc_audit = QCTestResult.query.order_by(QCTestResult.test_date.desc()).all()
+        production_audit = ProductionBatch.query.order_by(ProductionBatch.planned_date.desc()).all()
+        formulas = Formula.query.all()
+        
+        total_tests = len(qc_audit)
+        passed_tests = len([t for t in qc_audit if t.status == 'pass'])
+        failed_tests = len([t for t in qc_audit if t.status == 'fail'])
+        pending_tests = len([t for t in qc_audit if t.status == 'pending'])
+        
+        testers = {}
+        for test in qc_audit:
+            if test.tested_by:
+                testers[test.tested_by] = testers.get(test.tested_by, 0) + 1
+        
+        return render_template(
+            template,
+            qc_audit=qc_audit,
+            production_audit=production_audit,
+            formulas=formulas,
+            total_tests=total_tests,
+            passed_tests=passed_tests,
+            failed_tests=failed_tests,
+            pending_tests=pending_tests,
+            testers=testers
+        )
+    
+    # ============================================
+    # MD (EXECUTIVE) ROLE
+    # ============================================
+    elif current_user.role == 'md':
+        total_formulas = Formula.query.count()
+        approved_formulas = Formula.query.filter_by(status='approved').count()
+        total_materials = RawMaterial.query.count()
+        
+        all_qc = QCTestResult.query.all()
+        total_qc_tests = len(all_qc)
+        qc_pass_rate = round((len([t for t in all_qc if t.status == 'pass']) / total_qc_tests * 100)) if total_qc_tests > 0 else 0
+        
+        thirty_days_ago = datetime.utcnow().replace(day=1)
+        monthly_qc = [t for t in all_qc if t.test_date and t.test_date >= thirty_days_ago]
+        monthly_pass = len([t for t in monthly_qc if t.status == 'pass'])
+        monthly_fail = len([t for t in monthly_qc if t.status == 'fail'])
+        
+        all_production = ProductionBatch.query.all()
+        total_batches = len(all_production)
+        completed_batches = len([b for b in all_production if b.status == 'completed'])
+        total_produced = sum(b.quantity_produced or 0 for b in all_production)
+        total_planned = sum(b.quantity_planned or 0 for b in all_production)
+        
+        production_efficiency = round((total_produced / total_planned * 100)) if total_planned > 0 else 0
+        
+        materials = RawMaterial.query.all()
+        total_inventory_value = sum((m.stock_level or 0) * (m.cost_per_unit or 0) for m in materials)
+        low_stock_count = len([m for m in materials if m.stock_level and m.stock_level < 50])
+        
+        recent_qc = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(5).all()
+        recent_production = ProductionBatch.query.order_by(ProductionBatch.created_at.desc()).limit(5).all()
+        
+        dept_activity = {
+            'R&D': Formula.query.count(),
+            'QC': total_qc_tests,
+            'Planning': total_batches,
+            'Production': completed_batches
+        }
+        
+        return render_template(
+            template,
+            total_formulas=total_formulas,
+            approved_formulas=approved_formulas,
+            total_materials=total_materials,
+            total_qc_tests=total_qc_tests,
+            qc_pass_rate=qc_pass_rate,
+            monthly_qc_count=len(monthly_qc),
+            monthly_pass=monthly_pass,
+            monthly_fail=monthly_fail,
+            total_batches=total_batches,
+            completed_batches=completed_batches,
+            total_produced=total_produced,
+            total_planned=total_planned,
+            production_efficiency=production_efficiency,
+            total_inventory_value=total_inventory_value,
+            low_stock_count=low_stock_count,
+            recent_qc=recent_qc,
+            recent_production=recent_production,
+            dept_activity=dept_activity,
+            failed_tests=len([t for t in all_qc if t.status == 'fail'])
+        )
+    
+    # Fallback for any unmatched role
     return render_template(template)
 
-# NEW: QC Submit Test Result
+# ============================================
+# QC ROUTE
+# ============================================
+
 @app.route('/qc/submit', methods=['POST'])
 @login_required
 def submit_qc_result():
@@ -270,22 +356,18 @@ def submit_qc_result():
     test_date = request.form.get('test_date')
     notes = request.form.get('notes')
     
-    # Collect parameters
     param_names = request.form.getlist('param_name[]')
     param_results = request.form.getlist('param_result[]')
     param_units = request.form.getlist('param_unit[]')
     param_specs = request.form.getlist('param_spec[]')
     
-    # Build parameters JSON
     parameters = []
     all_pass = True
     for i in range(len(param_names)):
-        if param_names[i]:  # Only add if name is filled
-            # Simple pass/fail check based on spec range
+        if param_names[i]:
             spec_range = param_specs[i] if i < len(param_specs) else ''
             result_val = param_results[i] if i < len(param_results) else ''
             
-            # Try to parse spec range like "1400-1600"
             param_pass = True
             if spec_range and result_val:
                 try:
@@ -293,7 +375,7 @@ def submit_qc_result():
                     result_float = float(result_val)
                     param_pass = float(low) <= result_float <= float(high)
                 except:
-                    param_pass = True  # Can't parse, assume pass
+                    param_pass = True
             
             if not param_pass:
                 all_pass = False
@@ -306,7 +388,6 @@ def submit_qc_result():
                 'pass': param_pass
             })
     
-    import json
     test_result = QCTestResult(
         formula_id=formula_id,
         batch_number=batch_number,
@@ -338,7 +419,6 @@ def create_formula():
     name = request.form.get('name')
     version = request.form.get('version', '1.0')
     
-    # Check if code already exists
     existing = Formula.query.filter_by(code=code).first()
     if existing:
         flash('⚠️ Formula code already exists!')
@@ -369,9 +449,8 @@ def add_ingredient():
     quantity = request.form.get('quantity')
     unit = request.form.get('unit', 'kg')
     
-    # Check if ingredient already exists in formula
     existing = FormulaIngredient.query.filter_by(
-        formula_id=formula_id, 
+        formula_id=formula_id,
         raw_material_id=material_id
     ).first()
     
@@ -500,7 +579,6 @@ def create_production_batch():
     quantity_planned = request.form.get('quantity_planned')
     notes = request.form.get('notes')
     
-    # Check if batch number exists
     existing = ProductionBatch.query.filter_by(batch_number=batch_number).first()
     if existing:
         flash('⚠️ Batch number already exists!')
@@ -548,11 +626,6 @@ def export_consumption():
         flash('Access denied')
         return redirect(url_for('dashboard'))
     
-    import csv
-    import io
-    from flask import Response
-    
-    # Build CSV
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(['Material Code', 'Material Name', 'Total Used', 'Unit', 'Batch Count'])
@@ -584,6 +657,10 @@ def export_consumption():
         headers={"Content-disposition": "attachment; filename=consumption_report.csv"}
     )
 
+# ============================================
+# LOGOUT
+# ============================================
+
 @app.route('/logout')
 @login_required
 def logout():
@@ -593,6 +670,7 @@ def logout():
 # ============================================
 # INIT DATABASE
 # ============================================
+
 def init_db():
     with app.app_context():
         db.create_all()
@@ -611,9 +689,7 @@ def init_db():
             db.session.commit()
             print("✅ Database created and seeded with test users!")
         
-        # Seed some sample formulas and materials if empty
         if Formula.query.count() == 0:
-            # Create sample raw materials
             materials = [
                 RawMaterial(code='RM-001', name='Epoxy Resin A', supplier='ChemSupply Co', unit='kg', cost_per_unit=12.50, stock_level=500, created_by='system'),
                 RawMaterial(code='RM-002', name='Hardener B', supplier='ChemSupply Co', unit='kg', cost_per_unit=8.75, stock_level=300, created_by='system'),
@@ -623,12 +699,10 @@ def init_db():
             db.session.add_all(materials)
             db.session.commit()
             
-            # Create sample formula
             formula = Formula(code='F-101', name='Standard Red Coating', version='1.0', status='approved', created_by='system')
             db.session.add(formula)
             db.session.commit()
             
-            # Add ingredients
             ingredients = [
                 FormulaIngredient(formula_id=formula.id, raw_material_id=1, quantity=60, unit='kg'),
                 FormulaIngredient(formula_id=formula.id, raw_material_id=2, quantity=30, unit='kg'),
