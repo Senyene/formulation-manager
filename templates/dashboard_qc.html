@@ -52,10 +52,10 @@
                 <!-- Default rows with dropdowns -->
                 <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
                     <div class="col-span-3">
-                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
                             <option value="">Select parameter...</option>
                             {% for p in qc_parameters %}
-                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min }}" data-max="{{ p.spec_max }}">
+                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min if p.spec_min else '' }}" data-max="{{ p.spec_max if p.spec_max else '' }}">
                                 {{ p.name }}
                             </option>
                             {% endfor %}
@@ -63,7 +63,7 @@
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
+                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)">
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_unit[]" placeholder="Unit" readonly
@@ -80,10 +80,10 @@
                 </div>
                 <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
                     <div class="col-span-3">
-                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
                             <option value="">Select parameter...</option>
                             {% for p in qc_parameters %}
-                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min }}" data-max="{{ p.spec_max }}">
+                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min if p.spec_min else '' }}" data-max="{{ p.spec_max if p.spec_max else '' }}">
                                 {{ p.name }}
                             </option>
                             {% endfor %}
@@ -91,7 +91,7 @@
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
+                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)">
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_unit[]" placeholder="Unit" readonly
@@ -231,64 +231,111 @@
 // ============================================
 // PARAMETER DATA (from server)
 // ============================================
-const qcParams = [
+var qcParams = [
     {% for p in qc_parameters %}
     { name: "{{ p.name }}", unit: "{{ p.unit }}", min: {{ p.spec_min if p.spec_min else 'null' }}, max: {{ p.spec_max if p.spec_max else 'null' }} },
     {% endfor %}
 ];
 
 // ============================================
+// AUTO-CALC FORMULAS
+// ============================================
+// %SALT = SALT * 0.08
+// BOSTWICK = (TEMPERATURE * 0.013) + (BRIX * 0.08) + 2.98
+
+function getParamValue(paramName) {
+    var rows = document.querySelectorAll('.parameter-row');
+    for (var i = 0; i < rows.length; i++) {
+        var select = rows[i].querySelector('.param-name');
+        if (select && select.value.toUpperCase() === paramName.toUpperCase()) {
+            var resultInput = rows[i].querySelector('.param-result');
+            if (resultInput && resultInput.value && !resultInput.hasAttribute('data-auto')) {
+                return parseFloat(resultInput.value);
+            }
+        }
+    }
+    return null;
+}
+
+function setParamValue(paramName, value, isAuto) {
+    var rows = document.querySelectorAll('.parameter-row');
+    for (var i = 0; i < rows.length; i++) {
+        var select = rows[i].querySelector('.param-name');
+        if (select && select.value.toUpperCase() === paramName.toUpperCase()) {
+            var resultInput = rows[i].querySelector('.param-result');
+            if (resultInput) {
+                resultInput.value = value.toFixed(2);
+                if (isAuto) {
+                    resultInput.classList.add('bg-blue-50', 'border-blue-300');
+                    resultInput.setAttribute('data-auto', 'true');
+                    resultInput.setAttribute('readonly', 'readonly');
+                    resultInput.title = 'Auto-calculated value';
+                }
+                onParamChange(select);
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+function runAutoCalculations(changedParam) {
+    changedParam = changedParam ? changedParam.toUpperCase() : '';
+    
+    // %SALT = SALT * 0.08
+    if (changedParam === 'SALT' || changedParam === '') {
+        var saltVal = getParamValue('SALT');
+        if (saltVal !== null) {
+            var pctSalt = saltVal * 0.08;
+            setParamValue('%SALT', pctSalt, true);
+        }
+    }
+    
+    // BOSTWICK = (TEMPERATURE * 0.013) + (BRIX * 0.08) + 2.98
+    if (changedParam === 'TEMPERATURE' || changedParam === 'BRIX' || changedParam === '') {
+        var tempVal = getParamValue('TEMPERATURE');
+        var brixVal = getParamValue('BRIX');
+        
+        if (tempVal !== null && brixVal !== null) {
+            var bostwick = (tempVal * 0.013) + (brixVal * 0.08) + 2.98;
+            setParamValue('BOSTWICK', bostwick, true);
+        }
+    }
+}
+
+// ============================================
 // DYNAMIC PARAMETERS
 // ============================================
 function createParameterRow() {
-    const row = document.createElement('div');
+    var row = document.createElement('div');
     row.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
     
-    let options = '<option value="">Select parameter...</option>';
-    qcParams.forEach(p => {
-        options += `<option value="${p.name}" data-unit="${p.unit}" data-min="${p.min || ''}" data-max="${p.max || ''}">${p.name}</option>`;
+    var options = '<option value="">Select parameter...</option>';
+    qcParams.forEach(function(p) {
+        options += '<option value="' + p.name + '" data-unit="' + p.unit + '" data-min="' + (p.min || '') + '" data-max="' + (p.max || '') + '">' + p.name + '</option>';
     });
     
-    row.innerHTML = `
-        <div class="col-span-3">
-            <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
-                ${options}
-            </select>
-        </div>
-        <div class="col-span-2">
-            <input type="text" name="param_result[]" placeholder="Result" 
-                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
-        </div>
-        <div class="col-span-2">
-            <input type="text" name="param_unit[]" placeholder="Unit" readonly
-                   class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
-        </div>
-        <div class="col-span-3">
-            <input type="text" name="param_spec[]" placeholder="Spec range" readonly
-                   class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
-        </div>
-        <div class="col-span-2">
-            <button type="button" onclick="removeParameter(this)" 
-                    class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button>
-        </div>
-    `;
+    row.innerHTML = '<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">' + options + '</select></div>' +
+        '<div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div>' +
+        '<div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
+        '<div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec range" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
+        '<div class="col-span-2"><button type="button" onclick="removeParameter(this)" class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button></div>';
+    
     return row;
 }
 
 function addParameter() {
-    const container = document.getElementById('parametersContainer');
+    var container = document.getElementById('parametersContainer');
     container.appendChild(createParameterRow());
 }
 
 function addAllParameters() {
-    const container = document.getElementById('parametersContainer');
-    // Clear existing rows
+    var container = document.getElementById('parametersContainer');
     container.innerHTML = '';
     
-    // Add one row per parameter
-    qcParams.forEach(p => {
-        const row = createParameterRow();
-        const select = row.querySelector('.param-name');
+    qcParams.forEach(function(p) {
+        var row = createParameterRow();
+        var select = row.querySelector('.param-name');
         select.value = p.name;
         onParamChange(select);
         container.appendChild(row);
@@ -296,39 +343,52 @@ function addAllParameters() {
 }
 
 function removeParameter(button) {
-    const container = document.getElementById('parametersContainer');
+    var container = document.getElementById('parametersContainer');
     if (container.querySelectorAll('.parameter-row').length > 1) {
         button.closest('.parameter-row').remove();
+        runAutoCalculations('');
     }
 }
 
 function onParamChange(select) {
-    const row = select.closest('.parameter-row');
-    const unitInput = row.querySelector('.param-unit');
-    const specInput = row.querySelector('.param-spec');
-    const resultInput = row.querySelector('.param-result');
+    var row = select.closest('.parameter-row');
+    var unitInput = row.querySelector('.param-unit');
+    var specInput = row.querySelector('.param-spec');
+    var resultInput = row.querySelector('.param-result');
     
-    const selectedOption = select.options[select.selectedIndex];
-    const unit = selectedOption.getAttribute('data-unit') || '';
-    const min = selectedOption.getAttribute('data-min') || '';
-    const max = selectedOption.getAttribute('data-max') || '';
+    var selectedOption = select.options[select.selectedIndex];
+    var unit = selectedOption.getAttribute('data-unit') || '';
+    var min = selectedOption.getAttribute('data-min') || '';
+    var max = selectedOption.getAttribute('data-max') || '';
     
     unitInput.value = unit;
     
     if (min && max) {
         specInput.value = min + ' - ' + max;
     } else if (min) {
-        specInput.value = '≥ ' + min;
+        specInput.value = '\u2265 ' + min;
     } else if (max) {
-        specInput.value = '≤ ' + max;
+        specInput.value = '\u2264 ' + max;
     } else {
         specInput.value = '';
     }
     
+    // Mark auto-calc fields
+    var paramName = select.value.toUpperCase();
+    if (paramName === '%SALT' || paramName === 'BOSTWICK') {
+        resultInput.classList.add('bg-blue-50', 'border-blue-300');
+        resultInput.setAttribute('data-auto', 'true');
+        resultInput.setAttribute('readonly', 'readonly');
+        resultInput.title = 'Auto-calculated value';
+    }
+    
     // Highlight if result is out of spec
     resultInput.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
+    if (resultInput.getAttribute('data-auto') === 'true') {
+        resultInput.classList.add('bg-blue-50', 'border-blue-300');
+    }
     if (resultInput.value && min && max) {
-        const val = parseFloat(resultInput.value);
+        var val = parseFloat(resultInput.value);
         if (!isNaN(val)) {
             if (val >= parseFloat(min) && val <= parseFloat(max)) {
                 resultInput.classList.add('border-green-500', 'bg-green-50');
@@ -339,21 +399,29 @@ function onParamChange(select) {
     }
 }
 
-// Live validation on result input
-document.addEventListener('input', function(e) {
-    if (e.target.classList.contains('param-result')) {
-        const row = e.target.closest('.parameter-row');
-        const select = row.querySelector('.param-name');
+function onResultInput(input) {
+    // Block manual editing of auto-calc fields
+    if (input.getAttribute('data-auto') === 'true') {
+        return;
+    }
+    
+    var row = input.closest('.parameter-row');
+    var select = row.querySelector('.param-name');
+    if (select && select.value) {
         onParamChange(select);
     }
-});
+    
+    // Trigger auto-calculations
+    var paramName = select ? select.value.toUpperCase() : '';
+    runAutoCalculations(paramName);
+}
 
 // ============================================
 // TREND CHART
 // ============================================
-let trendChart = null;
+var trendChart = null;
 
-const allTests = [
+var allTests = [
     {% for test in recent_tests %}
     {
         id: {{ test.id }},
@@ -369,39 +437,38 @@ const allTests = [
 
 allTests.reverse();
 
-const chartColors = [
+var chartColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
     '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
     '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
 ];
 
 function updateTrendChart() {
-    const formulaFilter = document.getElementById('trendFormulaFilter').value;
-    const paramFilter = document.getElementById('trendParamFilter').value;
+    var formulaFilter = document.getElementById('trendFormulaFilter').value;
+    var paramFilter = document.getElementById('trendParamFilter').value;
     
-    let filteredTests = allTests;
+    var filteredTests = allTests;
     if (formulaFilter !== 'all') {
-        filteredTests = filteredTests.filter(t => t.formula_id == formulaFilter);
+        filteredTests = filteredTests.filter(function(t) { return t.formula_id == formulaFilter; });
     }
     
-    const datasets = {};
-    filteredTests.forEach((test, testIndex) => {
+    var datasets = {};
+    filteredTests.forEach(function(test, testIndex) {
         if (test.parameters) {
-            let params = test.parameters;
+            var params = test.parameters;
             if (typeof params === 'string') {
                 try { params = JSON.parse(params); } catch(e) { return; }
             }
-            params.forEach(p => {
+            params.forEach(function(p) {
                 if (!p.name) return;
                 if (paramFilter !== 'all' && p.name !== paramFilter) return;
                 
-                const resultVal = parseFloat(p.result);
+                var resultVal = parseFloat(p.result);
                 if (isNaN(resultVal)) return;
                 
                 if (!datasets[p.name]) {
-                    const colorIndex = Object.keys(datasets).length % chartColors.length;
-                    const paramInfo = qcParams.find(q => q.name === p.name);
-                    let label = p.name;
+                    var colorIndex = Object.keys(datasets).length % chartColors.length;
+                    var label = p.name;
                     if (p.unit) label += ' (' + p.unit + ')';
                     
                     datasets[p.name] = {
@@ -425,27 +492,20 @@ function updateTrendChart() {
         }
     });
     
-    const labels = filteredTests.map(t => t.batch);
+    var labels = filteredTests.map(function(t) { return t.batch; });
     
     if (trendChart) trendChart.destroy();
     
-    const ctx = document.getElementById('trendChart').getContext('2d');
+    var ctx = document.getElementById('trendChart').getContext('2d');
     
     if (Object.keys(datasets).length === 0) {
         ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        ctx.font = '14px sans-serif';
-        ctx.fillStyle = '#9CA3AF';
-        ctx.textAlign = 'center';
-        ctx.fillText('No trend data for selected filters', ctx.canvas.width/2, ctx.canvas.height/2);
         return;
     }
     
     trendChart = new Chart(ctx, {
         type: 'line',
-        data: {
-            labels: labels,
-            datasets: Object.values(datasets)
-        },
+        data: { labels: labels, datasets: Object.values(datasets) },
         options: {
             responsive: true,
             maintainAspectRatio: false,

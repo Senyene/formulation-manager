@@ -2,5 +2,5 @@
     "css.validate": false,
     "css.lint.validProperties": [],
     "html.validate.styles": false,
-    "js/ts.validate.enabled": false
+    "js/ts.implicitProjectConfig.checkJs": false
 }
