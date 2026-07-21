@@ -84,6 +84,15 @@ class ProductionBatch(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     formula = db.relationship('Formula')
 
+class QCParameter(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    unit = db.Column(db.String(20), default='')
+    spec_min = db.Column(db.Float, nullable=True)
+    spec_max = db.Column(db.Float, nullable=True)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -131,8 +140,9 @@ def dashboard():
     # ============================================
     if current_user.role == 'qc':
         formulas = Formula.query.filter_by(status='approved').all()
-        recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(10).all()
-        return render_template(template, formulas=formulas, recent_tests=recent_tests)
+        recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
+        qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
+        return render_template(template, formulas=formulas, recent_tests=recent_tests, qc_parameters=qc_parameters)
     
     # ============================================
     # R&D ROLE
@@ -141,7 +151,39 @@ def dashboard():
         formulas = Formula.query.order_by(Formula.created_at.desc()).all()
         materials = RawMaterial.query.order_by(RawMaterial.name).all()
         qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
-        return render_template(template, formulas=formulas, materials=materials, qc_feed=qc_feed)
+        qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
+        
+        # Build JSON for trend chart
+        all_tests = QCTestResult.query.order_by(QCTestResult.test_date.asc()).all()
+        tests_json = []
+        for t in all_tests:
+            tests_json.append({
+                'id': t.id,
+                'batch': t.batch_number,
+                'formula_id': t.formula_id,
+                'formula_code': t.formula.code if t.formula else 'N/A',
+                'date': t.test_date.strftime('%Y-%m-%d') if t.test_date else '',
+                'status': t.status,
+                'parameters': json.loads(t.parameters) if t.parameters else []
+            })
+        
+        params_json = []
+        for p in qc_parameters:
+            params_json.append({
+                'name': p.name,
+                'unit': p.unit or '',
+                'spec_min': p.spec_min,
+                'spec_max': p.spec_max
+            })
+        
+        return render_template(
+            template, 
+            formulas=formulas, 
+            materials=materials, 
+            qc_feed=qc_feed,
+            qc_parameters_json=json.dumps(params_json),
+            all_tests_json=json.dumps(tests_json)
+        )
     
     # ============================================
     # PLANNER ROLE
@@ -337,7 +379,6 @@ def dashboard():
             failed_tests=len([t for t in all_qc if t.status == 'fail'])
         )
     
-    # Fallback for any unmatched role
     return render_template(template)
 
 # ============================================
@@ -401,7 +442,7 @@ def submit_qc_result():
     db.session.add(test_result)
     db.session.commit()
     
-    flash('✅ Test result submitted successfully!')
+    flash('Test result submitted successfully!')
     return redirect(url_for('dashboard'))
 
 # ============================================
@@ -421,7 +462,7 @@ def create_formula():
     
     existing = Formula.query.filter_by(code=code).first()
     if existing:
-        flash('⚠️ Formula code already exists!')
+        flash('Formula code already exists!')
         return redirect(url_for('dashboard'))
     
     formula = Formula(
@@ -434,7 +475,7 @@ def create_formula():
     db.session.add(formula)
     db.session.commit()
     
-    flash(f'✅ Formula {code} created successfully!')
+    flash(f'Formula {code} created successfully!')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/add-ingredient', methods=['POST'])
@@ -455,7 +496,7 @@ def add_ingredient():
     ).first()
     
     if existing:
-        flash('⚠️ This material is already in the formula. Edit it instead.')
+        flash('This material is already in the formula. Edit it instead.')
         return redirect(url_for('dashboard'))
     
     ingredient = FormulaIngredient(
@@ -467,7 +508,7 @@ def add_ingredient():
     db.session.add(ingredient)
     db.session.commit()
     
-    flash('✅ Ingredient added to formula!')
+    flash('Ingredient added to formula!')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-ingredient/<int:ingredient_id>', methods=['POST'])
@@ -482,7 +523,7 @@ def update_ingredient(ingredient_id):
     ingredient.unit = request.form.get('unit', 'kg')
     db.session.commit()
     
-    flash('✅ Ingredient updated!')
+    flash('Ingredient updated!')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/remove-ingredient/<int:ingredient_id>', methods=['POST'])
@@ -496,7 +537,7 @@ def remove_ingredient(ingredient_id):
     db.session.delete(ingredient)
     db.session.commit()
     
-    flash('🗑️ Ingredient removed from formula.')
+    flash('Ingredient removed from formula.')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-formula-status/<int:formula_id>', methods=['POST'])
@@ -512,7 +553,7 @@ def update_formula_status(formula_id):
     if new_status in ['draft', 'approved', 'archived']:
         formula.status = new_status
         db.session.commit()
-        flash(f'✅ Formula {formula.code} is now {new_status.upper()}')
+        flash(f'Formula {formula.code} is now {new_status.upper()}')
     
     return redirect(url_for('dashboard'))
 
@@ -526,7 +567,7 @@ def create_material():
     code = request.form.get('code')
     existing = RawMaterial.query.filter_by(code=code).first()
     if existing:
-        flash('⚠️ Material code already exists!')
+        flash('Material code already exists!')
         return redirect(url_for('dashboard'))
     
     material = RawMaterial(
@@ -541,7 +582,7 @@ def create_material():
     db.session.add(material)
     db.session.commit()
     
-    flash(f'✅ Material {code} created!')
+    flash(f'Material {code} created!')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-material/<int:material_id>', methods=['POST'])
@@ -559,8 +600,66 @@ def update_material(material_id):
     material.stock_level = float(request.form.get('stock_level', 0))
     db.session.commit()
     
-    flash(f'✅ Material {material.code} updated!')
+    flash(f'Material {material.code} updated!')
     return redirect(url_for('dashboard'))
+
+# ============================================
+# QC PARAMETER MANAGEMENT (R&D access)
+# ============================================
+
+@app.route('/rd/parameters')
+@login_required
+def manage_parameters():
+    if current_user.role not in ['rd', 'qc']:
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    parameters = QCParameter.query.order_by(QCParameter.name).all()
+    return render_template('parameters.html', parameters=parameters)
+
+@app.route('/rd/parameters/add', methods=['POST'])
+@login_required
+def add_parameter():
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    name = request.form.get('name')
+    unit = request.form.get('unit', '')
+    spec_min = request.form.get('spec_min')
+    spec_max = request.form.get('spec_max')
+    
+    existing = QCParameter.query.filter_by(name=name).first()
+    if existing:
+        flash(f'Parameter "{name}" already exists!')
+        return redirect(url_for('manage_parameters'))
+    
+    param = QCParameter(
+        name=name,
+        unit=unit,
+        spec_min=float(spec_min) if spec_min else None,
+        spec_max=float(spec_max) if spec_max else None,
+        is_active=True
+    )
+    db.session.add(param)
+    db.session.commit()
+    
+    flash(f'Parameter "{name}" added!')
+    return redirect(url_for('manage_parameters'))
+
+@app.route('/rd/parameters/toggle/<int:param_id>', methods=['POST'])
+@login_required
+def toggle_parameter(param_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    param = QCParameter.query.get_or_404(param_id)
+    param.is_active = not param.is_active
+    db.session.commit()
+    
+    status = 'activated' if param.is_active else 'deactivated'
+    flash(f'Parameter "{param.name}" {status}!')
+    return redirect(url_for('manage_parameters'))
 
 # ============================================
 # PLANNER ROUTES
@@ -581,7 +680,7 @@ def create_production_batch():
     
     existing = ProductionBatch.query.filter_by(batch_number=batch_number).first()
     if existing:
-        flash('⚠️ Batch number already exists!')
+        flash('Batch number already exists!')
         return redirect(url_for('dashboard'))
     
     batch = ProductionBatch(
@@ -596,7 +695,7 @@ def create_production_batch():
     db.session.add(batch)
     db.session.commit()
     
-    flash(f'✅ Production batch {batch_number} planned!')
+    flash(f'Production batch {batch_number} planned!')
     return redirect(url_for('dashboard'))
 
 @app.route('/planner/update-batch/<int:batch_id>', methods=['POST'])
@@ -616,7 +715,7 @@ def update_production_batch(batch_id):
             batch.actual_date = datetime.utcnow()
     
     db.session.commit()
-    flash(f'✅ Batch {batch.batch_number} updated!')
+    flash(f'Batch {batch.batch_number} updated!')
     return redirect(url_for('dashboard'))
 
 @app.route('/planner/export-consumption')
@@ -687,32 +786,108 @@ def init_db():
             ]
             db.session.add_all(users)
             db.session.commit()
-            print("✅ Database created and seeded with test users!")
+            print("Database created and seeded with test users!")
         
-        if Formula.query.count() == 0:
+        if RawMaterial.query.count() == 0:
             materials = [
-                RawMaterial(code='RM-001', name='Epoxy Resin A', supplier='ChemSupply Co', unit='kg', cost_per_unit=12.50, stock_level=500, created_by='system'),
-                RawMaterial(code='RM-002', name='Hardener B', supplier='ChemSupply Co', unit='kg', cost_per_unit=8.75, stock_level=300, created_by='system'),
-                RawMaterial(code='RM-003', name='Pigment Red', supplier='ColorTech Ltd', unit='kg', cost_per_unit=25.00, stock_level=50, created_by='system'),
-                RawMaterial(code='RM-004', name='Filler Silica', supplier='MineralPro', unit='kg', cost_per_unit=3.20, stock_level=45, created_by='system'),
+                # ACIDS & PRESERVATIVES
+                RawMaterial(code='RM-001', name='Acetic acid', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-002', name='Citric acid', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-003', name='Potassium sorbate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-004', name='Sodium ascorbate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # COLOURS
+                RawMaterial(code='RM-005', name='Colour (Erythrosine)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-006', name='Colour (Ponceau 4R)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-007', name='Colour (Sunset Yellow)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-008', name='Colour (Allura Red)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-009', name='Caramel', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # DAIRY & CREAMERS
+                RawMaterial(code='RM-010', name='Non-dairy creamer (F28)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-011', name='Non-dairy creamer (A20)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # FIBRES & STARCHES
+                RawMaterial(code='RM-012', name='Soya Fibre', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-013', name='Corn starch', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-014', name='Maltodextrin', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-015', name='CMC (Carboxymethyl cellulose)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # FLAVOURS - SAVORY
+                RawMaterial(code='RM-016', name='Chicken flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-017', name='Chicken powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-018', name='Chicken oil', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-019', name='Curry flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-020', name='Onion flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-021', name='Onion powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-022', name='Garlic powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-023', name='M.S.G. (Monosodium glutamate)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-024', name='Sea food flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-025', name='Tomato flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # FLAVOURS - SWEET
+                RawMaterial(code='RM-026', name='Vanilla flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-027', name='Strawberry powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-028', name='Mixed fruit powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-029', name='Ginger with honey premix', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # GRAINS & FLOURS
+                RawMaterial(code='RM-030', name='Australian wheat', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-031', name='Russian wheat', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-032', name='Garri', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-033', name='Rice', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # HERBS & SPICES
+                RawMaterial(code='RM-034', name='Ginger powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-035', name='Tumeric powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-036', name='Pepper', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # OILS & FATS
+                RawMaterial(code='RM-037', name='Palm oil', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-038', name='Lecithin', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # POWDERS & DRINKS
+                RawMaterial(code='RM-039', name='Black tea powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-040', name='Cocoa powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-041', name='Coffee powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # PROCESSING AIDS
+                RawMaterial(code='RM-042', name='Magnesium stearate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-043', name='Silicon dioxide', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # SWEETENERS
+                RawMaterial(code='RM-044', name='Sugar', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # TOMATO PRODUCTS
+                RawMaterial(code='RM-045', name='Tomato concentrate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-046', name='Tomato powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # VITAMINS
+                RawMaterial(code='RM-047', name='Vitamins', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                
+                # WATER & BASIC
+                RawMaterial(code='RM-048', name='Salt', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
+                RawMaterial(code='RM-049', name='Water', supplier='TBD', unit='L', cost_per_unit=0, stock_level=0, created_by='system'),
             ]
             db.session.add_all(materials)
             db.session.commit()
-            
-            formula = Formula(code='F-101', name='Standard Red Coating', version='1.0', status='approved', created_by='system')
-            db.session.add(formula)
-            db.session.commit()
-            
-            ingredients = [
-                FormulaIngredient(formula_id=formula.id, raw_material_id=1, quantity=60, unit='kg'),
-                FormulaIngredient(formula_id=formula.id, raw_material_id=2, quantity=30, unit='kg'),
-                FormulaIngredient(formula_id=formula.id, raw_material_id=3, quantity=5, unit='kg'),
-                FormulaIngredient(formula_id=formula.id, raw_material_id=4, quantity=5, unit='kg'),
+            print("49 raw materials seeded!")
+        
+        if QCParameter.query.count() == 0:
+            default_params = [
+                QCParameter(name='BRIX', unit='°Bx', spec_min=0, spec_max=100),
+                QCParameter(name='COLOUR', unit='', spec_min=None, spec_max=None),
+                QCParameter(name='BRIGHTNESS', unit='%', spec_min=0, spec_max=100),
+                QCParameter(name='TEMPERATURE', unit='°C', spec_min=0, spec_max=200),
+                QCParameter(name='SALT', unit='%', spec_min=0, spec_max=100),
+                QCParameter(name='%SALT', unit='%', spec_min=0, spec_max=100),
+                QCParameter(name='pH', unit='', spec_min=0, spec_max=14),
+                QCParameter(name='ACIDITY', unit='%', spec_min=0, spec_max=100),
+                QCParameter(name='BOSTWICK', unit='cm', spec_min=0, spec_max=30),
             ]
-            db.session.add_all(ingredients)
+            db.session.add_all(default_params)
             db.session.commit()
-            
-            print("✅ Sample formulas and materials seeded!")
+            print("9 QC parameters seeded!")
 
 if __name__ == '__main__':
     init_db()

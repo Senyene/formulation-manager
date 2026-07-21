@@ -74,6 +74,37 @@
     </div>
 </div>
 
+<!-- QC PARAMETER TRENDS CHART -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">📈 QC Parameter Trends</h2>
+        <div class="flex gap-2">
+            <select id="trendFormulaFilter" onchange="updateTrendChart()" 
+                    class="px-3 py-1 border border-gray-300 rounded text-sm">
+                <option value="all">All Formulas</option>
+                {% for formula in formulas %}
+                <option value="{{ formula.id }}">{{ formula.code }}</option>
+                {% endfor %}
+            </select>
+            <select id="trendParamFilter" onchange="updateTrendChart()" 
+                    class="px-3 py-1 border border-gray-300 rounded text-sm">
+                <option value="all">All Parameters</option>
+            </select>
+        </div>
+    </div>
+    
+    <div class="relative" style="height: 350px;">
+        <canvas id="trendChart"></canvas>
+    </div>
+    
+    {% if not all_tests_json or all_tests_json == '[]' %}
+    <div id="trendEmptyState" class="text-center py-8 text-gray-400">
+        <p class="text-3xl mb-2">📊</p>
+        <p>QC test results will appear here once submitted</p>
+    </div>
+    {% endif %}
+</div>
+
 <!-- BOTTOM ROW: Formula Detail + Raw Materials -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
     
@@ -202,10 +233,20 @@
         {% endif %}
     </div>
     
-    <!-- Raw Materials Management -->
+    <!-- Raw Materials Management - COLLAPSIBLE BY CATEGORY -->
     <div class="bg-white rounded-lg shadow p-6">
         <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold">🧱 Raw Materials</h2>
+            <div class="flex items-center gap-3">
+                <h2 class="text-xl font-bold">🧱 Raw Materials</h2>
+                <a href="{{ url_for('manage_parameters') }}" 
+                   class="text-xs text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    QC Parameters
+                </a>
+            </div>
             <button onclick="document.getElementById('newMaterialForm').classList.toggle('hidden')"
                     class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
                 + New Material
@@ -219,7 +260,7 @@
                 <div class="grid grid-cols-2 gap-3 mb-3">
                     <div>
                         <label class="block text-xs text-gray-600 mb-1">Code *</label>
-                        <input type="text" name="code" required placeholder="e.g., RM-005"
+                        <input type="text" name="code" required placeholder="e.g., RM-050"
                                class="w-full px-2 py-1 border rounded text-sm">
                     </div>
                     <div>
@@ -252,69 +293,302 @@
             </form>
         </div>
         
-        <!-- Materials List -->
+        <!-- Materials List - Collapsible Categories -->
         {% if materials %}
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th class="px-3 py-2 text-left">Code</th>
-                        <th class="px-3 py-2 text-left">Name</th>
-                        <th class="px-3 py-2 text-left">Supplier</th>
-                        <th class="px-3 py-2 text-right">Stock</th>
-                        <th class="px-3 py-2 text-right">Cost/Unit</th>
-                        <th class="px-3 py-2">Edit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for mat in materials %}
-                    <tr class="border-t hover:bg-gray-50">
-                        <td class="px-3 py-2 font-medium">{{ mat.code }}</td>
-                        <td class="px-3 py-2">{{ mat.name }}</td>
-                        <td class="px-3 py-2 text-gray-500">{{ mat.supplier or '-' }}</td>
-                        <td class="px-3 py-2 text-right">{{ mat.stock_level }} {{ mat.unit }}</td>
-                        <td class="px-3 py-2 text-right">${{ "%.2f"|format(mat.cost_per_unit|float) if mat.cost_per_unit else '0.00' }}</td>
-                        <td class="px-3 py-2 text-center">
-                            <button onclick="document.getElementById('edit-mat-{{ mat.id }}').classList.toggle('hidden')"
-                                    class="text-blue-500 text-xs hover:underline">Edit</button>
-                        </td>
-                    </tr>
-                    <!-- Edit Row (hidden) -->
-                    <tr id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50">
-                        <td colspan="6" class="px-3 py-2">
-                            <form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap">
-                                <div>
-                                    <label class="text-xs text-gray-500">Name</label>
-                                    <input type="text" name="name" value="{{ mat.name }}" class="w-32 px-2 py-1 border rounded text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Supplier</label>
-                                    <input type="text" name="supplier" value="{{ mat.supplier or '' }}" class="w-28 px-2 py-1 border rounded text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Unit</label>
-                                    <input type="text" name="unit" value="{{ mat.unit }}" class="w-16 px-2 py-1 border rounded text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Cost/Unit</label>
-                                    <input type="number" step="0.01" name="cost_per_unit" value="{{ mat.cost_per_unit or 0 }}" class="w-20 px-2 py-1 border rounded text-sm">
-                                </div>
-                                <div>
-                                    <label class="text-xs text-gray-500">Stock</label>
-                                    <input type="number" step="0.01" name="stock_level" value="{{ mat.stock_level }}" class="w-20 px-2 py-1 border rounded text-sm">
-                                </div>
-                                <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
-                            </form>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        
+        {% set categories = {
+            'Acids & Preservatives': ['Acetic acid', 'Citric acid', 'Potassium sorbate', 'Sodium ascorbate'],
+            'Colours': ['Colour (Erythrosine)', 'Colour (Ponceau 4R)', 'Colour (Sunset Yellow)', 'Colour (Allura Red)', 'Caramel'],
+            'Dairy & Creamers': ['Non-dairy creamer (F28)', 'Non-dairy creamer (A20)'],
+            'Fibres & Starches': ['Soya Fibre', 'Corn starch', 'Maltodextrin', 'CMC (Carboxymethyl cellulose)'],
+            'Flavours - Savory': ['Chicken flavor', 'Chicken powder', 'Chicken oil', 'Curry flavor', 'Onion flavor', 'Onion powder', 'Garlic powder', 'M.S.G. (Monosodium glutamate)', 'Sea food flavor', 'Tomato flavor'],
+            'Flavours - Sweet': ['Vanilla flavor', 'Strawberry powder', 'Mixed fruit powder', 'Ginger with honey premix'],
+            'Grains & Flours': ['Australian wheat', 'Russian wheat', 'Garri', 'Rice'],
+            'Herbs & Spices': ['Ginger powder', 'Tumeric powder', 'Pepper'],
+            'Oils & Fats': ['Palm oil', 'Lecithin'],
+            'Powders & Drinks': ['Black tea powder', 'Cocoa powder', 'Coffee powder'],
+            'Processing Aids': ['Magnesium stearate', 'Silicon dioxide'],
+            'Sweeteners': ['Sugar'],
+            'Tomato Products': ['Tomato concentrate', 'Tomato powder'],
+            'Vitamins': ['Vitamins'],
+            'Water & Basic': ['Salt', 'Water']
+        } %}
+        
+        <!-- Search Filter -->
+        <div class="mb-3">
+            <input type="text" id="materialSearch" placeholder="🔍 Search materials..." 
+                   onkeyup="filterMaterials()"
+                   class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500">
         </div>
+        
+        <div class="space-y-2 max-h-[500px] overflow-y-auto" id="materialsContainer">
+            {% for category_name, category_items in categories.items() %}
+                {% set cat_materials = [] %}
+                {% for mat in materials %}
+                    {% if mat.name in category_items %}
+                        {% set _ = cat_materials.append(mat) %}
+                    {% endif %}
+                {% endfor %}
+                
+                {% if cat_materials|length > 0 %}
+                <div class="border rounded-lg overflow-hidden material-category">
+                    <!-- Category Header - Clickable -->
+                    <button onclick="toggleCategory(this)" 
+                            class="w-full flex justify-between items-center px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left">
+                        <span class="font-medium text-sm text-gray-700">
+                            {{ category_name }}
+                            <span class="text-xs text-gray-400 ml-1">({{ cat_materials|length }})</span>
+                        </span>
+                        <svg class="w-4 h-4 text-gray-400 transition-transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </button>
+                    
+                    <!-- Category Items -->
+                    <div class="divide-y">
+                        {% for mat in cat_materials %}
+                        <div class="material-item" data-name="{{ mat.name|lower }}" data-code="{{ mat.code|lower }}" data-supplier="{{ mat.supplier|lower }}">
+                            <!-- Display Row -->
+                            <div class="px-3 py-2 hover:bg-gray-50 flex justify-between items-center text-sm">
+                                <div class="flex-1 min-w-0">
+                                    <span class="font-medium text-xs">{{ mat.code }}</span>
+                                    <span class="text-gray-600 ml-2">{{ mat.name }}</span>
+                                    <span class="text-gray-400 text-xs ml-1">{{ mat.supplier if mat.supplier != 'TBD' else '' }}</span>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <span class="text-xs text-gray-400">{{ mat.stock_level }} {{ mat.unit }}</span>
+                                    {% if mat.cost_per_unit and mat.cost_per_unit > 0 %}
+                                    <span class="text-xs text-gray-500">${{ "%.2f"|format(mat.cost_per_unit) }}</span>
+                                    {% endif %}
+                                    <button onclick="event.stopPropagation(); document.getElementById('edit-mat-{{ mat.id }}').classList.toggle('hidden')"
+                                            class="text-blue-500 text-xs hover:underline">Edit</button>
+                                </div>
+                            </div>
+                            <!-- Edit Row (HIDDEN by default) -->
+                            <div id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50 px-3 py-2 border-t">
+                                <form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap">
+                                    <div>
+                                        <label class="text-xs text-gray-500">Name</label>
+                                        <input type="text" name="name" value="{{ mat.name }}" class="w-32 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500">Supplier</label>
+                                        <input type="text" name="supplier" value="{{ mat.supplier or '' }}" class="w-28 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500">Unit</label>
+                                        <input type="text" name="unit" value="{{ mat.unit }}" class="w-16 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500">Cost/Unit</label>
+                                        <input type="number" step="0.01" name="cost_per_unit" value="{{ mat.cost_per_unit or 0 }}" class="w-20 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="text-xs text-gray-500">Stock</label>
+                                        <input type="number" step="0.01" name="stock_level" value="{{ mat.stock_level }}" class="w-20 px-2 py-1 border rounded text-sm">
+                                    </div>
+                                    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
+                                    <button type="button" onclick="document.getElementById('edit-mat-{{ mat.id }}').classList.add('hidden')" 
+                                            class="text-gray-400 hover:text-gray-600 text-xs">Cancel</button>
+                                </form>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+        
         {% else %}
         <p class="text-gray-400 text-center py-8">No materials created yet</p>
         {% endif %}
     </div>
 </div>
+
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- Hidden data for JavaScript -->
+<script type="application/json" id="qcParamsData">{{ qc_parameters_json | safe if qc_parameters_json else '[]' }}</script>
+<script type="application/json" id="allTestsData">{{ all_tests_json | safe if all_tests_json else '[]' }}</script>
+
+<script>
+// Parse server data
+var qcParams = [];
+var allTests = [];
+
+try {
+    var paramsEl = document.getElementById('qcParamsData');
+    if (paramsEl) qcParams = JSON.parse(paramsEl.textContent);
+} catch(e) { qcParams = []; }
+
+try {
+    var testsEl = document.getElementById('allTestsData');
+    if (testsEl) allTests = JSON.parse(testsEl.textContent);
+} catch(e) { allTests = []; }
+
+// Reverse for chronological order
+if (allTests.length > 0) allTests.reverse();
+
+// Populate parameter filter dropdown
+function buildParamDropdown() {
+    var paramSet = new Set();
+    qcParams.forEach(function(p) {
+        if (p.name) paramSet.add(p.name);
+    });
+    
+    var select = document.getElementById('trendParamFilter');
+    select.innerHTML = '<option value="all">All Parameters</option>';
+    paramSet.forEach(function(param) {
+        var opt = document.createElement('option');
+        opt.value = param;
+        opt.textContent = param;
+        select.appendChild(opt);
+    });
+}
+
+// Chart colors
+var chartColors = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+    '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
+    '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
+];
+
+// ============================================
+// TREND CHART
+// ============================================
+var trendChart = null;
+
+function updateTrendChart() {
+    var formulaFilter = document.getElementById('trendFormulaFilter').value;
+    var paramFilter = document.getElementById('trendParamFilter').value;
+    
+    var filteredTests = allTests.filter(function(t) {
+        if (formulaFilter !== 'all' && t.formula_id != formulaFilter) return false;
+        return true;
+    });
+    
+    var datasets = {};
+    filteredTests.forEach(function(test, testIndex) {
+        var params = test.parameters;
+        if (typeof params === 'string') {
+            try { params = JSON.parse(params); } catch(e) { return; }
+        }
+        if (!params) return;
+        
+        params.forEach(function(p) {
+            if (!p.name) return;
+            if (paramFilter !== 'all' && p.name !== paramFilter) return;
+            
+            var resultVal = parseFloat(p.result);
+            if (isNaN(resultVal)) return;
+            
+            if (!datasets[p.name]) {
+                var colorIndex = Object.keys(datasets).length % chartColors.length;
+                var label = p.name;
+                if (p.unit) label += ' (' + p.unit + ')';
+                
+                datasets[p.name] = {
+                    label: label,
+                    data: [],
+                    borderColor: chartColors[colorIndex],
+                    backgroundColor: chartColors[colorIndex] + '20',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                };
+            }
+            
+            while (datasets[p.name].data.length < testIndex) {
+                datasets[p.name].data.push(null);
+            }
+            datasets[p.name].data.push(resultVal);
+        });
+    });
+    
+    var labels = filteredTests.map(function(t) { return t.batch; });
+    
+    if (trendChart) trendChart.destroy();
+    
+    var ctx = document.getElementById('trendChart').getContext('2d');
+    
+    var dsArray = Object.values(datasets);
+    if (dsArray.length === 0) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        return;
+    }
+    
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: dsArray },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, padding: 20, font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Batch', font: { size: 11 } },
+                    ticks: { maxRotation: 45, font: { size: 10 } }
+                },
+                y: {
+                    title: { display: true, text: 'Result Value', font: { size: 11 } },
+                    beginAtZero: false,
+                    ticks: { font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+// ============================================
+// RAW MATERIALS
+// ============================================
+function toggleCategory(button) {
+    var itemsDiv = button.nextElementSibling;
+    var chevron = button.querySelector('svg');
+    itemsDiv.classList.toggle('hidden');
+    chevron.classList.toggle('rotate-90');
+}
+
+function filterMaterials() {
+    var query = document.getElementById('materialSearch').value.toLowerCase();
+    var categories = document.querySelectorAll('.material-category');
+    
+    categories.forEach(function(category) {
+        var items = category.querySelectorAll('.material-item');
+        var hasVisible = false;
+        
+        items.forEach(function(item) {
+            var name = item.getAttribute('data-name') || '';
+            var code = item.getAttribute('data-code') || '';
+            var supplier = item.getAttribute('data-supplier') || '';
+            
+            if (name.indexOf(query) > -1 || code.indexOf(query) > -1 || supplier.indexOf(query) > -1) {
+                item.style.display = '';
+                hasVisible = true;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        category.style.display = hasVisible ? '' : 'none';
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    buildParamDropdown();
+    if (allTests.length > 0) updateTrendChart();
+});
+</script>
 
 {% endblock %}

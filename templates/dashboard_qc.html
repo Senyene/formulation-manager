@@ -49,23 +49,29 @@
             </div>
             
             <div id="parametersContainer">
-                <!-- Default 3 parameter rows -->
+                <!-- Default rows with dropdowns -->
                 <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
                     <div class="col-span-3">
-                        <input type="text" name="param_name[]" placeholder="Parameter name" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                            <option value="">Select parameter...</option>
+                            {% for p in qc_parameters %}
+                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min }}" data-max="{{ p.spec_max }}">
+                                {{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
                     </div>
                     <div class="col-span-2">
-                        <input type="text" name="param_unit[]" placeholder="Unit (e.g., cP)" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <input type="text" name="param_unit[]" placeholder="Unit" readonly
+                               class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
                     </div>
                     <div class="col-span-3">
-                        <input type="text" name="param_spec[]" placeholder="Spec range (e.g., 1400-1600)" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <input type="text" name="param_spec[]" placeholder="Spec range" readonly
+                               class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
                     </div>
                     <div class="col-span-2">
                         <button type="button" onclick="removeParameter(this)" 
@@ -74,42 +80,26 @@
                 </div>
                 <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
                     <div class="col-span-3">
-                        <input type="text" name="param_name[]" placeholder="Parameter name" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                            <option value="">Select parameter...</option>
+                            {% for p in qc_parameters %}
+                            <option value="{{ p.name }}" data-unit="{{ p.unit }}" data-min="{{ p.spec_min }}" data-max="{{ p.spec_max }}">
+                                {{ p.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="col-span-2">
                         <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
                     </div>
                     <div class="col-span-2">
-                        <input type="text" name="param_unit[]" placeholder="Unit" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <input type="text" name="param_unit[]" placeholder="Unit" readonly
+                               class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
                     </div>
                     <div class="col-span-3">
-                        <input type="text" name="param_spec[]" placeholder="Spec range" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
-                    </div>
-                    <div class="col-span-2">
-                        <button type="button" onclick="removeParameter(this)" 
-                                class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button>
-                    </div>
-                </div>
-                <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
-                    <div class="col-span-3">
-                        <input type="text" name="param_name[]" placeholder="Parameter name" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
-                    </div>
-                    <div class="col-span-2">
-                        <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
-                    </div>
-                    <div class="col-span-2">
-                        <input type="text" name="param_unit[]" placeholder="Unit" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
-                    </div>
-                    <div class="col-span-3">
-                        <input type="text" name="param_spec[]" placeholder="Spec range" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                        <input type="text" name="param_spec[]" placeholder="Spec range" readonly
+                               class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
                     </div>
                     <div class="col-span-2">
                         <button type="button" onclick="removeParameter(this)" 
@@ -117,6 +107,14 @@
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Quick Add All Parameters Button -->
+        <div class="mb-4">
+            <button type="button" onclick="addAllParameters()" 
+                    class="text-blue-500 text-sm hover:underline">
+                ⚡ Quick-add all approved parameters
+            </button>
         </div>
         
         <!-- Notes -->
@@ -131,6 +129,40 @@
             ✅ Submit Test Result
         </button>
     </form>
+</div>
+
+<!-- PARAMETER TRENDS CHART -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">📈 Parameter Trends</h2>
+        <div class="flex gap-2">
+            <select id="trendFormulaFilter" onchange="updateTrendChart()" 
+                    class="px-3 py-1 border border-gray-300 rounded text-sm">
+                <option value="all">All Formulas</option>
+                {% for formula in formulas %}
+                <option value="{{ formula.id }}">{{ formula.code }}</option>
+                {% endfor %}
+            </select>
+            <select id="trendParamFilter" onchange="updateTrendChart()" 
+                    class="px-3 py-1 border border-gray-300 rounded text-sm">
+                <option value="all">All Parameters</option>
+                {% for p in qc_parameters %}
+                <option value="{{ p.name }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    <div class="relative" style="height: 350px;">
+        <canvas id="trendChart"></canvas>
+    </div>
+    
+    {% if not recent_tests %}
+    <div class="text-center py-8 text-gray-400">
+        <p class="text-3xl mb-2">📊</p>
+        <p>Submit test results to see parameter trends</p>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Recent Submissions Table -->
@@ -157,14 +189,17 @@
                     <td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td>
                     <td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y') if test.test_date else '' }}</td>
                     <td class="px-4 py-2">
-                        {% set params = test.parameters|tojson if test.parameters else '[]' %}
-                        {% set params_list = params|replace('\"', '"') %}
-                        <span class="text-xs text-gray-500">
-                            {% if test.parameters %}
-                                {% set json_params = test.parameters %}
-                                {{ json_params[:80] }}{% if json_params|length > 80 %}...{% endif %}
+                        {% if test.parameters %}
+                        <div class="text-xs text-gray-600 max-w-xs">
+                            {% set params = test.parameters %}
+                            {% if params is string %}
+                                {% set param_list = params %}
+                                {{ param_list[:100] }}{% if param_list|length > 100 %}...{% endif %}
+                            {% else %}
+                                {{ params[:100] }}{% if params|length > 100 %}...{% endif %}
                             {% endif %}
-                        </span>
+                        </div>
+                        {% endif %}
                     </td>
                     <td class="px-4 py-2">
                         {% if test.status == 'pass' %}
@@ -189,45 +224,259 @@
     {% endif %}
 </div>
 
-<!-- JavaScript for dynamic parameters -->
+<!-- Chart.js CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
 <script>
-function addParameter() {
-    const container = document.getElementById('parametersContainer');
-    const newRow = document.createElement('div');
-    newRow.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
-    newRow.innerHTML = `
+// ============================================
+// PARAMETER DATA (from server)
+// ============================================
+const qcParams = [
+    {% for p in qc_parameters %}
+    { name: "{{ p.name }}", unit: "{{ p.unit }}", min: {{ p.spec_min if p.spec_min else 'null' }}, max: {{ p.spec_max if p.spec_max else 'null' }} },
+    {% endfor %}
+];
+
+// ============================================
+// DYNAMIC PARAMETERS
+// ============================================
+function createParameterRow() {
+    const row = document.createElement('div');
+    row.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
+    
+    let options = '<option value="">Select parameter...</option>';
+    qcParams.forEach(p => {
+        options += `<option value="${p.name}" data-unit="${p.unit}" data-min="${p.min || ''}" data-max="${p.max || ''}">${p.name}</option>`;
+    });
+    
+    row.innerHTML = `
         <div class="col-span-3">
-            <input type="text" name="param_name[]" placeholder="Parameter name" 
-                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+            <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
+                ${options}
+            </select>
         </div>
         <div class="col-span-2">
             <input type="text" name="param_result[]" placeholder="Result" 
-                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result">
         </div>
         <div class="col-span-2">
-            <input type="text" name="param_unit[]" placeholder="Unit" 
-                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+            <input type="text" name="param_unit[]" placeholder="Unit" readonly
+                   class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
         </div>
         <div class="col-span-3">
-            <input type="text" name="param_spec[]" placeholder="Spec range" 
-                   class="w-full px-2 py-2 border border-gray-300 rounded text-sm">
+            <input type="text" name="param_spec[]" placeholder="Spec range" readonly
+                   class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
         </div>
         <div class="col-span-2">
             <button type="button" onclick="removeParameter(this)" 
                     class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button>
         </div>
     `;
-    container.appendChild(newRow);
+    return row;
+}
+
+function addParameter() {
+    const container = document.getElementById('parametersContainer');
+    container.appendChild(createParameterRow());
+}
+
+function addAllParameters() {
+    const container = document.getElementById('parametersContainer');
+    // Clear existing rows
+    container.innerHTML = '';
+    
+    // Add one row per parameter
+    qcParams.forEach(p => {
+        const row = createParameterRow();
+        const select = row.querySelector('.param-name');
+        select.value = p.name;
+        onParamChange(select);
+        container.appendChild(row);
+    });
 }
 
 function removeParameter(button) {
-    const row = button.closest('.parameter-row');
     const container = document.getElementById('parametersContainer');
-    // Only remove if there's more than 1 row
     if (container.querySelectorAll('.parameter-row').length > 1) {
-        row.remove();
+        button.closest('.parameter-row').remove();
     }
 }
+
+function onParamChange(select) {
+    const row = select.closest('.parameter-row');
+    const unitInput = row.querySelector('.param-unit');
+    const specInput = row.querySelector('.param-spec');
+    const resultInput = row.querySelector('.param-result');
+    
+    const selectedOption = select.options[select.selectedIndex];
+    const unit = selectedOption.getAttribute('data-unit') || '';
+    const min = selectedOption.getAttribute('data-min') || '';
+    const max = selectedOption.getAttribute('data-max') || '';
+    
+    unitInput.value = unit;
+    
+    if (min && max) {
+        specInput.value = min + ' - ' + max;
+    } else if (min) {
+        specInput.value = '≥ ' + min;
+    } else if (max) {
+        specInput.value = '≤ ' + max;
+    } else {
+        specInput.value = '';
+    }
+    
+    // Highlight if result is out of spec
+    resultInput.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
+    if (resultInput.value && min && max) {
+        const val = parseFloat(resultInput.value);
+        if (!isNaN(val)) {
+            if (val >= parseFloat(min) && val <= parseFloat(max)) {
+                resultInput.classList.add('border-green-500', 'bg-green-50');
+            } else {
+                resultInput.classList.add('border-red-500', 'bg-red-50');
+            }
+        }
+    }
+}
+
+// Live validation on result input
+document.addEventListener('input', function(e) {
+    if (e.target.classList.contains('param-result')) {
+        const row = e.target.closest('.parameter-row');
+        const select = row.querySelector('.param-name');
+        onParamChange(select);
+    }
+});
+
+// ============================================
+// TREND CHART
+// ============================================
+let trendChart = null;
+
+const allTests = [
+    {% for test in recent_tests %}
+    {
+        id: {{ test.id }},
+        batch: "{{ test.batch_number }}",
+        formula_id: {{ test.formula_id }},
+        formula_code: "{{ test.formula.code if test.formula else 'N/A' }}",
+        date: "{{ test.test_date.strftime('%Y-%m-%d') if test.test_date else '' }}",
+        status: "{{ test.status }}",
+        parameters: {{ test.parameters | safe if test.parameters else '[]' }}
+    },
+    {% endfor %}
+];
+
+allTests.reverse();
+
+const chartColors = [
+    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+    '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
+    '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
+];
+
+function updateTrendChart() {
+    const formulaFilter = document.getElementById('trendFormulaFilter').value;
+    const paramFilter = document.getElementById('trendParamFilter').value;
+    
+    let filteredTests = allTests;
+    if (formulaFilter !== 'all') {
+        filteredTests = filteredTests.filter(t => t.formula_id == formulaFilter);
+    }
+    
+    const datasets = {};
+    filteredTests.forEach((test, testIndex) => {
+        if (test.parameters) {
+            let params = test.parameters;
+            if (typeof params === 'string') {
+                try { params = JSON.parse(params); } catch(e) { return; }
+            }
+            params.forEach(p => {
+                if (!p.name) return;
+                if (paramFilter !== 'all' && p.name !== paramFilter) return;
+                
+                const resultVal = parseFloat(p.result);
+                if (isNaN(resultVal)) return;
+                
+                if (!datasets[p.name]) {
+                    const colorIndex = Object.keys(datasets).length % chartColors.length;
+                    const paramInfo = qcParams.find(q => q.name === p.name);
+                    let label = p.name;
+                    if (p.unit) label += ' (' + p.unit + ')';
+                    
+                    datasets[p.name] = {
+                        label: label,
+                        data: [],
+                        borderColor: chartColors[colorIndex],
+                        backgroundColor: chartColors[colorIndex] + '20',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: false,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    };
+                }
+                
+                while (datasets[p.name].data.length < testIndex) {
+                    datasets[p.name].data.push(null);
+                }
+                datasets[p.name].data.push(resultVal);
+            });
+        }
+    });
+    
+    const labels = filteredTests.map(t => t.batch);
+    
+    if (trendChart) trendChart.destroy();
+    
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    
+    if (Object.keys(datasets).length === 0) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        ctx.font = '14px sans-serif';
+        ctx.fillStyle = '#9CA3AF';
+        ctx.textAlign = 'center';
+        ctx.fillText('No trend data for selected filters', ctx.canvas.width/2, ctx.canvas.height/2);
+        return;
+    }
+    
+    trendChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: Object.values(datasets)
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { intersect: false, mode: 'index' },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, padding: 20, font: { size: 11 } }
+                }
+            },
+            scales: {
+                x: {
+                    title: { display: true, text: 'Batch', font: { size: 11 } },
+                    ticks: { maxRotation: 45, font: { size: 10 } }
+                },
+                y: {
+                    title: { display: true, text: 'Result Value', font: { size: 11 } },
+                    beginAtZero: false,
+                    ticks: { font: { size: 10 } }
+                }
+            }
+        }
+    });
+}
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+    if (allTests.length > 0) {
+        updateTrendChart();
+    }
+});
 </script>
 
 {% endblock %}
