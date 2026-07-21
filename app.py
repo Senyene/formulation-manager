@@ -473,7 +473,7 @@ def submit_qc_result():
     test_result = QCTestResult(
         formula_id=formula_id,
         batch_number=batch_number,
-        test_date=datetime.strptime(test_date, '%Y-%m-%d') if test_date else datetime.utcnow(),
+        test_date=datetime.strptime(test_date, '%Y-%m-%dT%H:%M') if test_date else datetime.utcnow(),
         tested_by=current_user.display_name,
         parameters=json.dumps(parameters),
         status='pass' if all_pass else 'fail',
