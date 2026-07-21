@@ -96,13 +96,6 @@
     <div class="relative" style="height: 350px;">
         <canvas id="trendChart"></canvas>
     </div>
-    
-    {% if not all_tests_json or all_tests_json == '[]' %}
-    <div id="trendEmptyState" class="text-center py-8 text-gray-400">
-        <p class="text-3xl mb-2">📊</p>
-        <p>QC test results will appear here once submitted</p>
-    </div>
-    {% endif %}
 </div>
 
 <!-- BOTTOM ROW: Formula Detail + Raw Materials -->
@@ -115,7 +108,7 @@
         {% if formulas %}
         <div class="space-y-4">
             {% for formula in formulas %}
-            <div class="border rounded-lg p-4 {% if formula.status == 'approved' %}border-green-300 bg-green-50{% elif formula.status == 'archived' %}border-gray-300 bg-gray-50{% else %}border-blue-200{% endif %}">
+            <div class="border rounded-lg p-4 {% if formula.status == 'approved' %}border-green-300 bg-green-50{% elif formula.status == 'pending_approval' %}border-yellow-300 bg-yellow-50{% elif formula.status == 'archived' %}border-gray-300 bg-gray-50{% else %}border-blue-200{% endif %}">
                 <div class="flex justify-between items-start mb-3">
                     <div>
                         <span class="font-bold text-lg">{{ formula.code }}</span>
@@ -124,9 +117,10 @@
                     </div>
                     <span class="text-xs px-2 py-1 rounded font-medium
                         {% if formula.status == 'approved' %}bg-green-200 text-green-800
+                        {% elif formula.status == 'pending_approval' %}bg-yellow-200 text-yellow-800
                         {% elif formula.status == 'archived' %}bg-gray-300 text-gray-600
                         {% else %}bg-blue-200 text-blue-800{% endif %}">
-                        {{ formula.status.upper() }}
+                        {{ formula.status|upper|replace('_', ' ') }}
                     </span>
                 </div>
                 
@@ -146,15 +140,19 @@
                             <td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td>
                             <td class="py-1">{{ ing.quantity }} {{ ing.unit }}</td>
                             <td class="py-1">
+                                {% if formula.status == 'draft' %}
                                 <button onclick="document.getElementById('edit-ing-{{ ing.id }}').classList.toggle('hidden')" 
                                         class="text-blue-500 text-xs hover:underline">Edit</button>
                                 <form method="POST" action="{{ url_for('remove_ingredient', ingredient_id=ing.id) }}" class="inline">
                                     <button type="submit" class="text-red-500 text-xs hover:underline ml-2" 
                                             onclick="return confirm('Remove this ingredient?')">Remove</button>
                                 </form>
+                                {% else %}
+                                <span class="text-gray-400 text-xs">🔒 Locked</span>
+                                {% endif %}
                             </td>
                         </tr>
-                        <!-- Edit Row (hidden by default) -->
+                        {% if formula.status == 'draft' %}
                         <tr id="edit-ing-{{ ing.id }}" class="hidden bg-yellow-50 border-t">
                             <td colspan="3" class="py-2">
                                 <form method="POST" action="{{ url_for('update_ingredient', ingredient_id=ing.id) }}" class="flex gap-2 items-end">
@@ -172,14 +170,17 @@
                                 </form>
                             </td>
                         </tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
                 </table>
+                <p class="text-xs text-gray-400 mt-1">Batch Total: {{ "%.2f"|format(formula.batch_size) }} kg</p>
                 {% else %}
                 <p class="text-sm text-gray-400 mb-3">No ingredients added yet</p>
                 {% endif %}
                 
-                <!-- Add Ingredient Form -->
+                <!-- Add Ingredient Form (only for draft) -->
+                {% if formula.status == 'draft' %}
                 <form method="POST" action="{{ url_for('add_ingredient') }}" class="flex gap-2 items-end mt-2 pt-2 border-t">
                     <input type="hidden" name="formula_id" value="{{ formula.id }}">
                     <div class="flex-1">
@@ -200,20 +201,32 @@
                     </div>
                     <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ Add</button>
                 </form>
+                {% endif %}
                 
                 <!-- Status Change Buttons -->
                 <div class="flex gap-2 mt-3 pt-2 border-t">
+                    {% if formula.status == 'draft' and formula.ingredients %}
+                    <form method="POST" action="{{ url_for('submit_for_approval', formula_id=formula.id) }}" class="inline">
+                        <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📤 Submit for Approval</button>
+                    </form>
+                    {% endif %}
                     {% if formula.status == 'draft' %}
                     <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
-                        <input type="hidden" name="status" value="approved">
-                        <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded text-xs">✅ Approve</button>
+                        <input type="hidden" name="status" value="archived">
+                        <button type="submit" class="bg-gray-400 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
                     </form>
+                    {% endif %}
+                    {% if formula.status == 'pending_approval' %}
+                    <span class="text-yellow-600 text-xs flex items-center gap-1">⏳ Awaiting MD approval</span>
                     {% endif %}
                     {% if formula.status == 'approved' %}
                     <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
                         <input type="hidden" name="status" value="archived">
                         <button type="submit" class="bg-gray-500 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
                     </form>
+                    {% if formula.approved_by %}
+                    <span class="text-green-600 text-xs flex items-center gap-1">✅ Approved by {{ formula.approved_by }}</span>
+                    {% endif %}
                     {% endif %}
                     {% if formula.status == 'archived' %}
                     <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
@@ -253,7 +266,6 @@
             </button>
         </div>
         
-        <!-- New Material Form (hidden by default) -->
         <div id="newMaterialForm" class="hidden border border-green-200 rounded-lg p-4 mb-4 bg-green-50">
             <h3 class="font-semibold mb-3 text-green-800">Add New Material</h3>
             <form method="POST" action="{{ url_for('create_material') }}">
@@ -293,7 +305,6 @@
             </form>
         </div>
         
-        <!-- Materials List - Collapsible Categories -->
         {% if materials %}
         
         {% set categories = {
@@ -314,7 +325,6 @@
             'Water & Basic': ['Salt', 'Water']
         } %}
         
-        <!-- Search Filter -->
         <div class="mb-3">
             <input type="text" id="materialSearch" placeholder="🔍 Search materials..." 
                    onkeyup="filterMaterials()"
@@ -332,7 +342,6 @@
                 
                 {% if cat_materials|length > 0 %}
                 <div class="border rounded-lg overflow-hidden material-category">
-                    <!-- Category Header - Clickable -->
                     <button onclick="toggleCategory(this)" 
                             class="w-full flex justify-between items-center px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left">
                         <span class="font-medium text-sm text-gray-700">
@@ -344,11 +353,9 @@
                         </svg>
                     </button>
                     
-                    <!-- Category Items -->
                     <div class="divide-y">
                         {% for mat in cat_materials %}
                         <div class="material-item" data-name="{{ mat.name|lower }}" data-code="{{ mat.code|lower }}" data-supplier="{{ mat.supplier|lower }}">
-                            <!-- Display Row -->
                             <div class="px-3 py-2 hover:bg-gray-50 flex justify-between items-center text-sm">
                                 <div class="flex-1 min-w-0">
                                     <span class="font-medium text-xs">{{ mat.code }}</span>
@@ -364,7 +371,6 @@
                                             class="text-blue-500 text-xs hover:underline">Edit</button>
                                 </div>
                             </div>
-                            <!-- Edit Row (HIDDEN by default) -->
                             <div id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50 px-3 py-2 border-t">
                                 <form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap">
                                     <div>
@@ -409,12 +415,10 @@
 <!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-<!-- Hidden data for JavaScript -->
 <script type="application/json" id="qcParamsData">{{ qc_parameters_json | safe if qc_parameters_json else '[]' }}</script>
 <script type="application/json" id="allTestsData">{{ all_tests_json | safe if all_tests_json else '[]' }}</script>
 
 <script>
-// Parse server data
 var qcParams = [];
 var allTests = [];
 
@@ -428,10 +432,8 @@ try {
     if (testsEl) allTests = JSON.parse(testsEl.textContent);
 } catch(e) { allTests = []; }
 
-// Reverse for chronological order
 if (allTests.length > 0) allTests.reverse();
 
-// Populate parameter filter dropdown
 function buildParamDropdown() {
     var paramSet = new Set();
     qcParams.forEach(function(p) {
@@ -448,16 +450,12 @@ function buildParamDropdown() {
     });
 }
 
-// Chart colors
 var chartColors = [
     '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
     '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
     '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
 ];
 
-// ============================================
-// TREND CHART
-// ============================================
 var trendChart = null;
 
 function updateTrendChart() {
@@ -549,9 +547,6 @@ function updateTrendChart() {
     });
 }
 
-// ============================================
-// RAW MATERIALS
-// ============================================
 function toggleCategory(button) {
     var itemsDiv = button.nextElementSibling;
     var chevron = button.querySelector('svg');
@@ -584,7 +579,6 @@ function filterMaterials() {
     });
 }
 
-// Initialize
 document.addEventListener('DOMContentLoaded', function() {
     buildParamDropdown();
     if (allTests.length > 0) updateTrendChart();

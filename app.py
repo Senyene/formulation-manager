@@ -46,9 +46,12 @@ class Formula(db.Model):
     code = db.Column(db.String(20), unique=True, nullable=False)
     name = db.Column(db.String(200), nullable=False)
     version = db.Column(db.String(10), default='1.0')
-    status = db.Column(db.String(20), default='draft')
+    status = db.Column(db.String(20), default='draft')  # draft, pending_approval, approved, archived
     created_by = db.Column(db.String(80))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    approved_by = db.Column(db.String(80), nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    batch_size = db.Column(db.Float, default=0)
     ingredients = db.relationship('FormulaIngredient', backref='formula', lazy=True)
 
 class FormulaIngredient(db.Model):
@@ -98,6 +101,13 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ============================================
+# HELPER: Check if user can see formula details
+# ============================================
+def can_view_formula_details():
+    """Only R&D and MD can see ingredient names and quantities."""
+    return current_user.role in ['rd', 'md']
+
+# ============================================
 # ROUTES
 # ============================================
 
@@ -134,6 +144,7 @@ def dashboard():
         'md': 'dashboard_md.html'
     }
     template = role_templates.get(current_user.role, 'login.html')
+    show_formula_details = can_view_formula_details()
     
     # ============================================
     # QC ROLE
@@ -142,7 +153,27 @@ def dashboard():
         formulas = Formula.query.filter_by(status='approved').all()
         recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
-        return render_template(template, formulas=formulas, recent_tests=recent_tests, qc_parameters=qc_parameters)
+        
+        tests_json = []
+        for t in recent_tests:
+            tests_json.append({
+                'id': t.id,
+                'batch': t.batch_number,
+                'formula_id': t.formula_id,
+                'formula_code': t.formula.code if t.formula else 'N/A',
+                'date': t.test_date.strftime('%Y-%m-%d') if t.test_date else '',
+                'status': t.status,
+                'parameters': json.loads(t.parameters) if t.parameters else []
+            })
+        
+        return render_template(
+            template, 
+            formulas=formulas, 
+            recent_tests=recent_tests, 
+            qc_parameters=qc_parameters,
+            recent_tests_json=json.dumps(tests_json),
+            show_formula_details=False
+        )
     
     # ============================================
     # R&D ROLE
@@ -153,7 +184,6 @@ def dashboard():
         qc_feed = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
         
-        # Build JSON for trend chart
         all_tests = QCTestResult.query.order_by(QCTestResult.test_date.asc()).all()
         tests_json = []
         for t in all_tests:
@@ -182,7 +212,8 @@ def dashboard():
             materials=materials, 
             qc_feed=qc_feed,
             qc_parameters_json=json.dumps(params_json),
-            all_tests_json=json.dumps(tests_json)
+            all_tests_json=json.dumps(tests_json),
+            show_formula_details=True
         )
     
     # ============================================
@@ -224,7 +255,8 @@ def dashboard():
             qc_batches=qc_batches,
             consumption_data=consumption_data,
             production_batches=production_batches,
-            approved_formulas=approved_formulas
+            approved_formulas=approved_formulas,
+            show_formula_details=False
         )
     
     # ============================================
@@ -250,7 +282,8 @@ def dashboard():
             total_produced=total_produced,
             total_planned=total_planned,
             batches_today=batches_today,
-            qc_pass_rate=qc_pass_rate
+            qc_pass_rate=qc_pass_rate,
+            show_formula_details=False
         )
     
     # ============================================
@@ -284,7 +317,8 @@ def dashboard():
             passed_qc=passed_qc,
             failed_qc=failed_qc,
             efficiency=efficiency,
-            low_stock_materials=low_stock_materials
+            low_stock_materials=low_stock_materials,
+            show_formula_details=False
         )
     
     # ============================================
@@ -314,7 +348,8 @@ def dashboard():
             passed_tests=passed_tests,
             failed_tests=failed_tests,
             pending_tests=pending_tests,
-            testers=testers
+            testers=testers,
+            show_formula_details=False
         )
     
     # ============================================
@@ -323,6 +358,7 @@ def dashboard():
     elif current_user.role == 'md':
         total_formulas = Formula.query.count()
         approved_formulas = Formula.query.filter_by(status='approved').count()
+        pending_approvals = Formula.query.filter_by(status='pending_approval').count()
         total_materials = RawMaterial.query.count()
         
         all_qc = QCTestResult.query.all()
@@ -349,6 +385,8 @@ def dashboard():
         recent_qc = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(5).all()
         recent_production = ProductionBatch.query.order_by(ProductionBatch.created_at.desc()).limit(5).all()
         
+        pending_formulas = Formula.query.filter_by(status='pending_approval').order_by(Formula.created_at.desc()).all()
+        
         dept_activity = {
             'R&D': Formula.query.count(),
             'QC': total_qc_tests,
@@ -360,6 +398,7 @@ def dashboard():
             template,
             total_formulas=total_formulas,
             approved_formulas=approved_formulas,
+            pending_approvals=pending_approvals,
             total_materials=total_materials,
             total_qc_tests=total_qc_tests,
             qc_pass_rate=qc_pass_rate,
@@ -376,10 +415,12 @@ def dashboard():
             recent_qc=recent_qc,
             recent_production=recent_production,
             dept_activity=dept_activity,
-            failed_tests=len([t for t in all_qc if t.status == 'fail'])
+            failed_tests=len([t for t in all_qc if t.status == 'fail']),
+            pending_formulas=pending_formulas,
+            show_formula_details=True
         )
     
-    return render_template(template)
+    return render_template(template, show_formula_details=False)
 
 # ============================================
 # QC ROUTE
@@ -508,6 +549,8 @@ def add_ingredient():
     db.session.add(ingredient)
     db.session.commit()
     
+    _update_batch_size(formula_id)
+    
     flash('Ingredient added to formula!')
     return redirect(url_for('dashboard'))
 
@@ -523,6 +566,8 @@ def update_ingredient(ingredient_id):
     ingredient.unit = request.form.get('unit', 'kg')
     db.session.commit()
     
+    _update_batch_size(ingredient.formula_id)
+    
     flash('Ingredient updated!')
     return redirect(url_for('dashboard'))
 
@@ -534,10 +579,70 @@ def remove_ingredient(ingredient_id):
         return redirect(url_for('dashboard'))
     
     ingredient = FormulaIngredient.query.get_or_404(ingredient_id)
+    fid = ingredient.formula_id
     db.session.delete(ingredient)
     db.session.commit()
     
+    _update_batch_size(fid)
+    
     flash('Ingredient removed from formula.')
+    return redirect(url_for('dashboard'))
+
+@app.route('/rd/submit-for-approval/<int:formula_id>', methods=['POST'])
+@login_required
+def submit_for_approval(formula_id):
+    if current_user.role != 'rd':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get_or_404(formula_id)
+    if formula.status == 'draft' and formula.ingredients:
+        formula.status = 'pending_approval'
+        db.session.commit()
+        flash(f'Formula {formula.code} submitted for MD approval!')
+    else:
+        flash('Formula must be in draft status and have ingredients.')
+    
+    return redirect(url_for('dashboard'))
+
+# ============================================
+# MD APPROVAL ROUTES
+# ============================================
+
+@app.route('/md/approve/<int:formula_id>', methods=['POST'])
+@login_required
+def approve_formula(formula_id):
+    if current_user.role != 'md':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get_or_404(formula_id)
+    if formula.status == 'pending_approval':
+        formula.status = 'approved'
+        formula.approved_by = current_user.display_name
+        formula.approved_at = datetime.utcnow()
+        db.session.commit()
+        flash(f'Formula {formula.code} has been APPROVED!')
+    else:
+        flash('Formula is not pending approval.')
+    
+    return redirect(url_for('dashboard'))
+
+@app.route('/md/reject/<int:formula_id>', methods=['POST'])
+@login_required
+def reject_formula(formula_id):
+    if current_user.role != 'md':
+        flash('Access denied')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get_or_404(formula_id)
+    if formula.status == 'pending_approval':
+        formula.status = 'draft'
+        db.session.commit()
+        flash(f'Formula {formula.code} has been REJECTED and returned to draft.')
+    else:
+        flash('Formula is not pending approval.')
+    
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-formula-status/<int:formula_id>', methods=['POST'])
@@ -550,7 +655,7 @@ def update_formula_status(formula_id):
     formula = Formula.query.get_or_404(formula_id)
     new_status = request.form.get('status')
     
-    if new_status in ['draft', 'approved', 'archived']:
+    if new_status in ['draft', 'archived']:
         formula.status = new_status
         db.session.commit()
         flash(f'Formula {formula.code} is now {new_status.upper()}')
@@ -767,6 +872,86 @@ def logout():
     return redirect(url_for('login'))
 
 # ============================================
+# HELPER FUNCTIONS
+# ============================================
+
+def _update_batch_size(formula_id):
+    ingredients = FormulaIngredient.query.filter_by(formula_id=formula_id).all()
+    total = sum(ing.quantity for ing in ingredients)
+    formula = Formula.query.get(formula_id)
+    if formula:
+        formula.batch_size = total
+        db.session.commit()
+
+# ============================================
+# INGREDIENT MAPPING
+# ============================================
+
+INGREDIENT_MAP = {
+    'Garri': 'Garri',
+    'Sugar': 'Sugar',
+    'Milk': 'Non-dairy creamer (F28)',
+    'Non-dairy creamer': 'Non-dairy creamer (F28)',
+    'Azika creamer': 'Non-dairy creamer (A20)',
+    'Azika powder': 'Non-dairy creamer (A20)',
+    'Azika milk': 'Non-dairy creamer (A20)',
+    'Azika': 'Non-dairy creamer (A20)',
+    'Grinded sugar': 'Sugar',
+    'Magnesium stearate': 'Magnesium stearate',
+    'Cocoa powder': 'Cocoa powder',
+    'CMC': 'CMC (Carboxymethyl cellulose)',
+    'Fibre': 'Soya Fibre',
+    'Corn starch': 'Corn starch',
+    'Silicon dioxide': 'Silicon dioxide',
+    'Lecithin': 'Lecithin',
+    'Maltdextrin': 'Maltodextrin',
+    'Malt dextrin': 'Maltodextrin',
+    'Black tea powder': 'Black tea powder',
+    'Coffee powder': 'Coffee powder',
+    'Vitamins': 'Vitamins',
+    'Starch': 'Corn starch',
+    'Wheat': 'Australian wheat',
+    'Australian wheat': 'Australian wheat',
+    'Russian wheat': 'Russian wheat',
+    'Rice': 'Rice',
+    'Ginger with honey premix': 'Ginger with honey premix',
+    'Chicken flavor': 'Chicken flavor',
+    'Beef flavor': 'Chicken flavor',
+    'Sea food flavor': 'Sea food flavor',
+    'Curry flavor': 'Curry flavor',
+    'Onion flavor': 'Onion flavor',
+    'Tomato flavor': 'Tomato flavor',
+    'Salt': 'Salt',
+    'Palm oil': 'Palm oil',
+    'M.S.G.': 'M.S.G. (Monosodium glutamate)',
+    'Msg': 'M.S.G. (Monosodium glutamate)',
+    'Chicken oil': 'Chicken oil',
+    'Chicken powder': 'Chicken powder',
+    'Mixed fruit powder': 'Mixed fruit powder',
+    'Strawberry powder': 'Strawberry powder',
+    'Vanilla flavor': 'Vanilla flavor',
+    'Concentrate': 'Tomato concentrate',
+    'Tomato concentrate': 'Tomato concentrate',
+    'Water': 'Water',
+    'Citric acid': 'Citric acid',
+    'Potassium sorbate': 'Potassium sorbate',
+    'Caramel': 'Caramel',
+    'Colour (Erythrosine)': 'Colour (Erythrosine)',
+    'Colour (Ponceau 4R)': 'Colour (Ponceau 4R)',
+    'Colour (Sunset Yellow)': 'Colour (Sunset Yellow)',
+    'Colour (Allura Red)': 'Colour (Allura Red)',
+    'Stabilizer (CMC)': 'CMC (Carboxymethyl cellulose)',
+    'Sodium ascorbate': 'Sodium ascorbate',
+    'Sodium erythrobate': 'Sodium ascorbate',
+    'Garlic': 'Garlic powder',
+    'Ginger': 'Ginger powder',
+    'Tumeric': 'Tumeric powder',
+    'Onion powder': 'Onion powder',
+    'Pepper': 'Pepper',
+    'Acetic acid': 'Acetic acid',
+}
+
+# ============================================
 # INIT DATABASE
 # ============================================
 
@@ -790,30 +975,21 @@ def init_db():
         
         if RawMaterial.query.count() == 0:
             materials = [
-                # ACIDS & PRESERVATIVES
                 RawMaterial(code='RM-001', name='Acetic acid', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-002', name='Citric acid', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-003', name='Potassium sorbate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-004', name='Sodium ascorbate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # COLOURS
                 RawMaterial(code='RM-005', name='Colour (Erythrosine)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-006', name='Colour (Ponceau 4R)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-007', name='Colour (Sunset Yellow)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-008', name='Colour (Allura Red)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-009', name='Caramel', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # DAIRY & CREAMERS
                 RawMaterial(code='RM-010', name='Non-dairy creamer (F28)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-011', name='Non-dairy creamer (A20)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # FIBRES & STARCHES
                 RawMaterial(code='RM-012', name='Soya Fibre', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-013', name='Corn starch', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-014', name='Maltodextrin', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-015', name='CMC (Carboxymethyl cellulose)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # FLAVOURS - SAVORY
                 RawMaterial(code='RM-016', name='Chicken flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-017', name='Chicken powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-018', name='Chicken oil', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
@@ -824,48 +1000,28 @@ def init_db():
                 RawMaterial(code='RM-023', name='M.S.G. (Monosodium glutamate)', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-024', name='Sea food flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-025', name='Tomato flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # FLAVOURS - SWEET
                 RawMaterial(code='RM-026', name='Vanilla flavor', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-027', name='Strawberry powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-028', name='Mixed fruit powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-029', name='Ginger with honey premix', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # GRAINS & FLOURS
                 RawMaterial(code='RM-030', name='Australian wheat', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-031', name='Russian wheat', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-032', name='Garri', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-033', name='Rice', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # HERBS & SPICES
                 RawMaterial(code='RM-034', name='Ginger powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-035', name='Tumeric powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-036', name='Pepper', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # OILS & FATS
                 RawMaterial(code='RM-037', name='Palm oil', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-038', name='Lecithin', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # POWDERS & DRINKS
                 RawMaterial(code='RM-039', name='Black tea powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-040', name='Cocoa powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-041', name='Coffee powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # PROCESSING AIDS
                 RawMaterial(code='RM-042', name='Magnesium stearate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-043', name='Silicon dioxide', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # SWEETENERS
                 RawMaterial(code='RM-044', name='Sugar', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # TOMATO PRODUCTS
                 RawMaterial(code='RM-045', name='Tomato concentrate', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-046', name='Tomato powder', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # VITAMINS
                 RawMaterial(code='RM-047', name='Vitamins', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
-                
-                # WATER & BASIC
                 RawMaterial(code='RM-048', name='Salt', supplier='TBD', unit='kg', cost_per_unit=0, stock_level=0, created_by='system'),
                 RawMaterial(code='RM-049', name='Water', supplier='TBD', unit='L', cost_per_unit=0, stock_level=0, created_by='system'),
             ]
@@ -888,7 +1044,202 @@ def init_db():
             db.session.add_all(default_params)
             db.session.commit()
             print("9 QC parameters seeded!")
+        
+        _seed_formulas()
 
+def _seed_formulas():
+    if Formula.query.count() > 0:
+        return
+    
+    materials = {m.name: m for m in RawMaterial.query.all()}
+    
+    def get_mat(name):
+        mapped = INGREDIENT_MAP.get(name, name)
+        return materials.get(mapped)
+    
+    def add_ings(formula, ing_list):
+        for ing_name, qty in ing_list:
+            mat = get_mat(ing_name)
+            if mat:
+                unit = 'L' if mat.name == 'Water' else 'kg'
+                db.session.add(FormulaIngredient(
+                    formula_id=formula.id,
+                    raw_material_id=mat.id,
+                    quantity=qty,
+                    unit=unit
+                ))
+    
+    # ============================================
+    # GARRI MIX 3IN 1
+    # ============================================
+    f = Formula(code='F-001-OLD', name='Garri Mix 3in1', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Garri', 23.1), ('Sugar', 5), ('Milk', 2.5)])
+    
+    f = Formula(code='F-001', name='Garri Mix 3in1', version='2.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Garri', 20), ('Sugar', 6), ('Milk', 12)])
+    
+    # ============================================
+    # RICVITA
+    # ============================================
+    f = Formula(code='F-002-OLD', name='Ricvita', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 50), ('Grinded sugar', 62), ('Magnesium stearate', 1), ('Cocoa powder', 4), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    f = Formula(code='F-002', name='Ricvita', version='2.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 65), ('Sugar', 50), ('Magnesium stearate', 1), ('Cocoa powder', 6), ('Corn starch', 5)])
+    
+    f = Formula(code='F-002B', name='Ricvita (Alt)', version='2.1', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 65), ('Sugar', 50), ('Lecithin', 6), ('Cocoa powder', 6.5), ('Corn starch', 5), ('Silicon dioxide', 0.7)])
+    
+    f = Formula(code='F-002S', name='Small Size Ricvita', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 15), ('Azika creamer', 35), ('Grinded sugar', 62), ('Magnesium stearate', 1), ('Cocoa powder', 4), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    f = Formula(code='F-002BIG', name='Big Size Ricvita', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 50), ('Grinded sugar', 62), ('Magnesium stearate', 1), ('Cocoa powder', 4), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    # ============================================
+    # MILK TEA
+    # ============================================
+    f = Formula(code='F-003-OLD', name='Milk Tea', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 31), ('Sugar', 62), ('Magnesium stearate', 1), ('Maltdextrin', 10), ('CMC', 0.25), ('Fibre', 0.25), ('Black tea powder', 3.5)])
+    
+    f = Formula(code='F-003', name='Milk Tea', version='2.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 31), ('Sugar', 62), ('Magnesium stearate', 1), ('Maltdextrin', 10), ('Corn starch', 5), ('Black tea powder', 3.5)])
+    
+    f = Formula(code='F-003B', name='Milk Tea (Alt)', version='2.1', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 31), ('Sugar', 62), ('Silicon dioxide', 0.7), ('Maltdextrin', 10), ('Corn starch', 5), ('Black tea powder', 3.5), ('Lecithin', 2)])
+    
+    f = Formula(code='F-003S', name='Small Size Milk Tea', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Black tea powder', 3.5), ('Sugar', 62), ('Malt dextrin', 10), ('Azika creamer', 21.7), ('Non-dairy creamer', 9.3), ('Magnesium stearate', 1), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    f = Formula(code='F-003BIG', name='Big Size Milk Tea', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Black tea powder', 3.5), ('Sugar', 62), ('Malt dextrin', 10), ('Magnesium stearate', 1), ('Non-dairy creamer', 31), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    # ============================================
+    # COFFEE MIX
+    # ============================================
+    f = Formula(code='F-004-OLD', name='Coffee Mix', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 31), ('Sugar', 62), ('Magnesium stearate', 1), ('Maltdextrin', 10), ('CMC', 0.25), ('Fibre', 0.25), ('Coffee powder', 4.5)])
+    
+    f = Formula(code='F-004', name='Coffee Mix', version='2.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 31), ('Sugar', 62), ('Magnesium stearate', 1), ('Maltdextrin', 10), ('Corn starch', 5), ('Coffee powder', 4.5)])
+    
+    f = Formula(code='F-004S', name='Small Size Coffee Mix', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Coffee powder', 4.5), ('Azika powder', 21.7), ('Non-dairy creamer', 9.3), ('Sugar', 44), ('Malt dextrin', 10), ('Magnesium stearate', 1), ('CMC', 0.25), ('Fibre', 0.25)])
+    
+    # ============================================
+    # MILK POWDER
+    # ============================================
+    f = Formula(code='F-005', name='Milk Powder', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 50), ('Vitamins', 0.2)])
+    
+    f = Formula(code='F-005S', name='Small Size Milk Powder', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Azika milk', 42.5), ('Non-dairy creamer', 7.5), ('Vitamins', 0.2)])
+    
+    f = Formula(code='F-005BIG', name='Big Size Milk Powder', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Non-dairy creamer', 50), ('Vitamins', 0.2)])
+    
+    # ============================================
+    # GARRI CHOCOLATE MIX
+    # ============================================
+    f = Formula(code='F-006', name='Garri Chocolate Mix', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Garri', 23.1), ('Sugar', 6), ('Milk', 8), ('Cocoa powder', 1)])
+    
+    # ============================================
+    # WHEAT FLOUR
+    # ============================================
+    f = Formula(code='F-007-OLD', name='Wheat Flour', version='1.0', status='archived', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Australian wheat', 22.5), ('Russian wheat', 22.5), ('Starch', 5), ('Vitamins', 0.5)])
+    
+    f = Formula(code='F-007', name='Wheat Flour', version='2.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Wheat', 45), ('Starch', 5), ('Vitamins', 0.5)])
+    
+    # ============================================
+    # RICE FLOUR
+    # ============================================
+    f = Formula(code='F-008', name='Rice Flour', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Rice', 1)])
+    
+    # ============================================
+    # GINGER WITH HONEY TEA
+    # ============================================
+    f = Formula(code='F-009', name='Ginger with Honey Tea', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Ginger with honey premix', 1)])
+    
+    # ============================================
+    # CUBE SEASONINGS
+    # ============================================
+    cube_formulas = [
+        ('F-010', 'Chicken Flavor Seasoning', [('Chicken flavor', 4), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 1), ('Chicken oil', 0.2)]),
+        ('F-011', 'Beef Flavor Seasoning', [('Beef flavor', 4), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 1)]),
+        ('F-012', 'Sea Food Flavor Seasoning', [('Sea food flavor', 4), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 3)]),
+        ('F-013', 'Curry Flavor Seasoning', [('Curry flavor', 1), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 1)]),
+        ('F-014', 'Onion Flavor Seasoning', [('Onion flavor', 4), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 1)]),
+        ('F-015', 'Tomato Flavor Seasoning', [('Tomato flavor', 4), ('Salt', 50), ('Sugar', 11), ('Palm oil', 3), ('Corn starch', 1), ('Maltdextrin', 4), ('M.S.G.', 12), ('Magnesium stearate', 1)]),
+        ('F-016', 'Milk Cubes', [('Non-dairy creamer', 60), ('Azika', 5), ('Sugar', 35), ('Magnesium stearate', 0.5)]),
+        ('F-017', 'Chocolate Cubes', [('Non-dairy creamer', 60), ('Azika', 5), ('Sugar', 35), ('Cocoa powder', 3), ('Magnesium stearate', 0.5)]),
+        ('F-018', 'Mixed Fruits Cubes', [('Non-dairy creamer', 60), ('Azika', 5), ('Sugar', 35), ('Magnesium stearate', 0.5), ('Mixed fruit powder', 0.5)]),
+        ('F-019', 'Strawberry Cubes', [('Non-dairy creamer', 60), ('Azika', 60), ('Sugar', 35), ('Magnesium stearate', 0.5), ('Strawberry powder', 0.5)]),
+        ('F-020', 'Vanilla Cubes', [('Non-dairy creamer', 60), ('Azika', 5), ('Sugar', 35), ('Magnesium stearate', 0.5), ('Vanilla flavor', 0.5)]),
+    ]
+    for code, name, ings in cube_formulas:
+        f = Formula(code=code, name=name, version='1.0', status='approved', created_by='system')
+        db.session.add(f); db.session.flush()
+        add_ings(f, ings)
+    
+    # ============================================
+    # TOMATO PASTES
+    # ============================================
+    f = Formula(code='F-021', name='Ric-giko/Tomagood/Erisco Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Concentrate', 480), ('Water', 1960), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium ascorbate', 0.2)])
+    
+    f = Formula(code='F-022', name='Erisco Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Concentrate', 720), ('Water', 1960), ('Fibre', 180), ('Sugar', 150), ('Salt', 60), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 6), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.075), ('Colour (Sunset Yellow)', 0.061), ('Colour (Allura Red)', 0.009), ('Stabilizer (CMC)', 0.067), ('Maltdextrin', 6), ('Sodium ascorbate', 2)])
+    
+    f = Formula(code='F-023', name='Nagiko Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Tomato concentrate', 330), ('Water', 2110), ('Fibre', 200), ('Sugar', 75), ('Salt', 40), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 3), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6)])
+    
+    f = Formula(code='F-024', name='Erisco Party Jollof Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Concentrate', 480), ('Water', 1960), ('Chicken powder', 8), ('Chicken oil', 0.5), ('Garlic', 6), ('Ginger', 5), ('Tumeric', 5), ('Onion powder', 40), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 25), ('Colour (Sunset Yellow)', 0.157), ('Colour (Allura Red)', 0.208), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium erythrobate', 0.2), ('Pepper', 8), ('Palm oil', 3)])
+    
+    f = Formula(code='F-025', name='Erisco So Red Ketchup', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Tomato concentrate', 233), ('Fibre', 30), ('Sugar', 253), ('Salt', 30), ('Citric acid', 10), ('Potassium sorbate', 4.5), ('Onion powder', 3), ('Colour (Erythrosine)', 0.035), ('Colour (Ponceau 4R)', 0.015), ('Acetic acid', 5), ('Corn starch', 20), ('Water', 940)])
+    
+    # Update batch sizes
+    for formula in Formula.query.all():
+        total = sum(ing.quantity for ing in formula.ingredients)
+        formula.batch_size = total
+    
+    db.session.commit()
+    print(f"{Formula.query.count()} formulas seeded!")
+    
 if __name__ == '__main__':
     init_db()
     app.run(debug=True, host='0.0.0.0', port=5000)
