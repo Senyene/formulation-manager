@@ -37,7 +37,7 @@
                 <label class="block text-sm font-medium text-gray-700 mb-1">Batch Number *</label>
                 <input type="text" name="batch_number" id="batchNumberInput" required 
                        class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-gray-50 font-mono"
-                       readonly title="Auto-generated from formula, shift, and sequence">
+                       readonly title="Auto-generated on submission">
                 <p id="batchFormatHint" class="text-xs text-gray-400 mt-1"></p>
             </div>
             <div>
@@ -47,7 +47,6 @@
             </div>
         </div>
         
-        <!-- Dynamic Parameters Section -->
         <div class="mb-4">
             <div class="flex justify-between items-center mb-2">
                 <label class="block text-sm font-medium text-gray-700">Test Parameters</label>
@@ -94,7 +93,6 @@
             </div>
         </div>
         
-        <!-- Notes -->
         <div class="mb-4">
             <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
             <textarea name="notes" rows="2" placeholder="Any observations or comments..."
@@ -116,11 +114,9 @@
                 <h2 class="text-lg font-bold">📋 Lab Worksheet</h2>
                 <button onclick="closeWorksheet()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>
-            
             <div id="worksheetContent">
                 <p class="text-gray-500 text-sm">Select a formula to load its worksheet parameters.</p>
             </div>
-            
             <div class="mt-4 pt-4 border-t flex gap-2">
                 <button onclick="loadWorksheetToForm()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold text-sm">
                     📋 Load These Parameters
@@ -151,7 +147,6 @@
             </select>
         </div>
     </div>
-    
     <div class="relative" style="height: 350px;">
         <canvas id="trendChart"></canvas>
     </div>
@@ -160,7 +155,6 @@
 <!-- Recent Submissions Table -->
 <div class="bg-white rounded-lg shadow p-6">
     <h2 class="text-xl font-bold mb-4">📊 Recent Test Submissions</h2>
-    
     {% if recent_tests %}
     <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -180,19 +174,11 @@
                     <td class="px-4 py-2 font-medium font-mono">{{ test.batch_number }}</td>
                     <td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td>
                     <td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '' }}</td>
+                    <td class="px-4 py-2">{% if test.parameters %}<span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>{% endif %}</td>
                     <td class="px-4 py-2">
-                        {% if test.parameters %}
-                        <span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>
-                        {% endif %}
-                    </td>
-                    <td class="px-4 py-2">
-                        {% if test.status == 'pass' %}
-                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>
-                        {% elif test.status == 'fail' %}
-                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>
-                        {% else %}
-                            <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>
-                        {% endif %}
+                        {% if test.status == 'pass' %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>
+                        {% elif test.status == 'fail' %}<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>
+                        {% else %}<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>{% endif %}
                     </td>
                     <td class="px-4 py-2 text-gray-500">{{ test.tested_by }}</td>
                 </tr>
@@ -201,20 +187,13 @@
         </table>
     </div>
     {% else %}
-    <div class="text-center py-8 text-gray-400">
-        <p class="text-4xl mb-2">📋</p>
-        <p>No test results submitted yet</p>
-    </div>
+    <div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">📋</p><p>No test results submitted yet</p></div>
     {% endif %}
 </div>
 
-<!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script>
-// ============================================
-// PARAMETER DATA
-// ============================================
 var allParams = {
     'TEMPERATURE': { name: 'TEMPERATURE', unit: '°C', min: 0, max: 200 },
     'BRIX': { name: 'BRIX', unit: '°Bx', min: 0, max: 100 },
@@ -233,537 +212,277 @@ var tomatoPasteCodes = ['F-021', 'F-022', 'F-023', 'F-024', 'F-025'];
 var tomatoPasteParams = ['TEMPERATURE', 'BRIX', 'SALT', '%SALT', 'COLOUR', 'BRIGHTNESS', 'pH', 'ACIDITY', 'BOSTWICK'];
 var otherParams = ['APPEARANCE', 'pH', 'ACIDITY', 'MOISTURE'];
 
-var qcParams = [];
-for (var key in allParams) {
-    if (allParams.hasOwnProperty(key)) {
-        qcParams.push(allParams[key]);
-    }
-}
-
-// ============================================
-// SHIFT & BATCH MANAGEMENT
-// ============================================
-var formulaCounters = {};
-var currentShiftLetter = 'A';
-
 function getCurrentShift() {
-    var now = new Date();
-    var hours = now.getHours();
-    if (hours >= 7 && hours < 19) return 'A';
-    return 'B';
+    var h = new Date().getHours();
+    return (h >= 7 && h < 19) ? 'A' : 'B';
 }
 
-function isTomatoProduct(formulaCode) {
-    return tomatoPasteCodes.indexOf(formulaCode) !== -1;
-}
+function isTomatoProduct(code) { return tomatoPasteCodes.indexOf(code) !== -1; }
 
-function getDatePeriod(isTomato) {
-    var now = new Date();
-    if (isTomato) {
-        return String(now.getDate()).padStart(2, '0') + String(now.getMonth() + 1).padStart(2, '0');
-    } else {
-        return String(now.getMonth() + 1).padStart(2, '0') + String(now.getFullYear()).slice(-2);
-    }
-}
-
-function getCounterKey(formulaCode) {
-    var isTomato = isTomatoProduct(formulaCode);
-    var datePeriod = getDatePeriod(isTomato);
-    var shift = getCurrentShift();
-    return formulaCode + '-' + shift + '-' + datePeriod;
-}
-
-function getNextSequence(formulaCode) {
-    var key = getCounterKey(formulaCode);
-    if (!formulaCounters[key]) formulaCounters[key] = 0;
-    formulaCounters[key]++;
-    return String(formulaCounters[key]).padStart(3, '0');
-}
-
-function generateBatchNumber(formulaCode) {
-    if (!formulaCode) return '';
+function updateBatchPreview() {
+    var select = document.getElementById('formulaSelect');
+    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
+    var input = document.getElementById('batchNumberInput');
+    var hint = document.getElementById('batchFormatHint');
+    
+    if (!code) { input.value = ''; hint.textContent = ''; return; }
+    
     var now = new Date();
     var shift = getCurrentShift();
-    var seq = getNextSequence(formulaCode);
-    var isTomato = isTomatoProduct(formulaCode);
+    var isTomato = isTomatoProduct(code);
     
     if (isTomato) {
         var dd = String(now.getDate()).padStart(2, '0');
         var mm = String(now.getMonth() + 1).padStart(2, '0');
-        return dd + '/' + mm + '-' + shift + '-' + seq;
+        input.value = dd + mm + '-' + shift + '-XXX';
+        hint.textContent = 'Format: DDMM-Shift-Seq — Number assigned on submission';
     } else {
         var mmyy = String(now.getMonth() + 1).padStart(2, '0') + String(now.getFullYear()).slice(-2);
-        return mmyy + '-' + shift + '-' + seq;
-    }
-}
-
-function updateBatchNumber() {
-    var select = document.getElementById('formulaSelect');
-    var formulaCode = '';
-    if (select.selectedIndex > 0) {
-        formulaCode = select.options[select.selectedIndex].getAttribute('data-code');
-    }
-    
-    var batchInput = document.getElementById('batchNumberInput');
-    var hintEl = document.getElementById('batchFormatHint');
-    
-    if (formulaCode) {
-        var isTomato = isTomatoProduct(formulaCode);
-        batchInput.value = generateBatchNumber(formulaCode);
-        hintEl.textContent = isTomato 
-            ? 'Format: DD/MM-Shift-Seq — Resets daily per shift per formula' 
-            : 'Format: MM/YY-Shift-Seq — Resets monthly per shift per formula';
-    } else {
-        batchInput.value = '';
-        hintEl.textContent = '';
+        input.value = mmyy + '-' + shift + '-XXX';
+        hint.textContent = 'Format: MMYY-Shift-Seq — Number assigned on submission';
     }
 }
 
 function updateLiveClock() {
     var now = new Date();
-    var hours = String(now.getHours()).padStart(2, '0');
-    var minutes = String(now.getMinutes()).padStart(2, '0');
-    var seconds = String(now.getSeconds()).padStart(2, '0');
-    var timeStr = hours + ':' + minutes + ':' + seconds;
+    var h = String(now.getHours()).padStart(2, '0');
+    var m = String(now.getMinutes()).padStart(2, '0');
+    var s = String(now.getSeconds()).padStart(2, '0');
+    document.getElementById('liveClock').textContent = h + ':' + m + ':' + s;
     
     var shift = getCurrentShift();
-    var shiftLabel = shift === 'A' ? 'SHIFT A' : 'SHIFT B';
-    var shiftClass = shift === 'A' ? 'bg-blue-100 text-blue-800' : 'bg-indigo-100 text-indigo-800';
+    var label = shift === 'A' ? 'SHIFT A' : 'SHIFT B';
+    var cls = shift === 'A' ? 'bg-blue-100 text-blue-800' : 'bg-indigo-100 text-indigo-800';
+    var el = document.getElementById('currentShift');
+    el.textContent = label;
+    el.className = 'text-xs px-2 py-1 rounded font-medium ' + cls;
     
     var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var dateStr = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+    document.getElementById('liveDate').textContent = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
     
-    document.getElementById('liveClock').textContent = timeStr;
-    document.getElementById('liveDate').textContent = dateStr;
-    
-    var shiftEl = document.getElementById('currentShift');
-    shiftEl.textContent = shiftLabel;
-    shiftEl.className = 'text-xs px-2 py-1 rounded font-medium ' + shiftClass;
-    
-    var year = now.getFullYear();
-    var month = String(now.getMonth() + 1).padStart(2, '0');
-    var day = String(now.getDate()).padStart(2, '0');
-    document.getElementById('testDateInput').value = year + '-' + month + '-' + day + 'T' + hours + ':' + minutes;
-    
-    var newShift = getCurrentShift();
-    if (newShift !== currentShiftLetter) {
-        currentShiftLetter = newShift;
-    }
+    document.getElementById('testDateInput').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + h + ':' + m;
 }
 
-// ============================================
-// FORMULA CHANGE HANDLER
-// ============================================
 function onFormulaChange() {
     var select = document.getElementById('formulaSelect');
-    var formulaCode = '';
-    if (select.selectedIndex > 0) {
-        formulaCode = select.options[select.selectedIndex].getAttribute('data-code');
+    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
+    if (code) {
+        var isTomato = isTomatoProduct(code);
+        showWorksheet(code, select.options[select.selectedIndex].text, isTomato ? tomatoPasteParams : otherParams, isTomato);
     }
-    
-    if (formulaCode) {
-        var isTomato = isTomatoProduct(formulaCode);
-        var params = isTomato ? tomatoPasteParams : otherParams;
-        showWorksheet(formulaCode, select.options[select.selectedIndex].text, params, isTomato);
-    }
-    
-    updateBatchNumber();
+    updateBatchPreview();
 }
 
 function reopenWorksheet() {
     var select = document.getElementById('formulaSelect');
-    if (select.selectedIndex > 0) {
-        onFormulaChange();
-    } else {
-        alert('Please select a formula first.');
-    }
+    if (select.selectedIndex > 0) onFormulaChange();
+    else alert('Please select a formula first.');
 }
 
-function showWorksheet(formulaCode, formulaName, params, isTomato) {
-    var content = document.getElementById('worksheetContent');
-    var productType = isTomato ? '🍅 Tomato Paste / Mix' : '📦 Dry Food / Seasoning / Cube';
-    
-    var html = '<div class="mb-3"><span class="font-semibold">' + formulaCode + '</span> - ' + formulaName + '</div>';
-    html += '<div class="text-xs text-gray-500 mb-3">Product Type: ' + productType + '</div>';
+function showWorksheet(code, name, params, isTomato) {
+    var html = '<div class="mb-3"><span class="font-semibold">' + code + '</span> - ' + name + '</div>';
+    html += '<div class="text-xs text-gray-500 mb-3">Product Type: ' + (isTomato ? '🍅 Tomato Paste / Mix' : '📦 Dry Food / Seasoning / Cube') + '</div>';
     html += '<div class="text-xs text-gray-400 mb-2">' + params.length + ' parameters will be loaded</div>';
-    
-    html += '<div class="border rounded-lg overflow-hidden">';
-    html += '<table class="w-full text-sm">';
-    html += '<thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Parameter</th><th class="px-3 py-2 text-left">Unit</th><th class="px-3 py-2 text-left">Spec Range</th></tr></thead>';
-    html += '<tbody>';
-    
+    html += '<div class="border rounded-lg overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Parameter</th><th class="px-3 py-2 text-left">Unit</th><th class="px-3 py-2 text-left">Spec Range</th></tr></thead><tbody>';
     for (var i = 0; i < params.length; i++) {
         var p = allParams[params[i]];
         if (!p) continue;
         var spec = '-';
-        if (p.min !== null && p.max !== null) {
-            spec = p.min + ' - ' + p.max;
-        } else if (p.min !== null) {
-            spec = '\u2265 ' + p.min;
-        } else if (p.max !== null) {
-            spec = '\u2264 ' + p.max;
-        }
-        var autoLabel = p.auto ? ' ⚡' : '';
-        html += '<tr class="border-t">';
-        html += '<td class="px-3 py-1 text-gray-400 text-xs">' + (i + 1) + '</td>';
-        html += '<td class="px-3 py-1 font-medium">' + p.name + autoLabel + '</td>';
-        html += '<td class="px-3 py-1 text-gray-500">' + (p.unit || '-') + '</td>';
-        html += '<td class="px-3 py-1 text-gray-500">' + spec + '</td>';
-        html += '</tr>';
+        if (p.min !== null && p.max !== null) spec = p.min + ' - ' + p.max;
+        else if (p.min !== null) spec = '\u2265 ' + p.min;
+        else if (p.max !== null) spec = '\u2264 ' + p.max;
+        html += '<tr class="border-t"><td class="px-3 py-1 text-gray-400 text-xs">' + (i+1) + '</td><td class="px-3 py-1 font-medium">' + p.name + (p.auto ? ' ⚡' : '') + '</td><td class="px-3 py-1 text-gray-500">' + (p.unit || '-') + '</td><td class="px-3 py-1 text-gray-500">' + spec + '</td></tr>';
     }
-    
-    html += '</tbody></table></div>';
-    html += '<div class="text-xs text-gray-400 mt-2">⚡ = Auto-calculated value</div>';
-    
-    content.innerHTML = html;
+    html += '</tbody></table></div><div class="text-xs text-gray-400 mt-2">⚡ = Auto-calculated value</div>';
+    document.getElementById('worksheetContent').innerHTML = html;
     document.getElementById('worksheetModal').classList.remove('hidden');
 }
 
-function closeWorksheet() {
-    document.getElementById('worksheetModal').classList.add('hidden');
-}
+function closeWorksheet() { document.getElementById('worksheetModal').classList.add('hidden'); }
 
 function loadWorksheetToForm() {
     var select = document.getElementById('formulaSelect');
-    var formulaCode = '';
-    if (select.selectedIndex > 0) {
-        formulaCode = select.options[select.selectedIndex].getAttribute('data-code');
-    }
-    
-    if (!formulaCode) { closeWorksheet(); return; }
-    
-    var isTomato = isTomatoProduct(formulaCode);
-    var params = isTomato ? tomatoPasteParams : otherParams;
-    
+    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
+    if (!code) { closeWorksheet(); return; }
+    var params = isTomatoProduct(code) ? tomatoPasteParams : otherParams;
     var container = document.getElementById('parametersContainer');
     container.innerHTML = '';
-    
     for (var i = 0; i < params.length; i++) {
-        var paramName = params[i];
-        var paramData = allParams[paramName];
-        if (!paramData) continue;
-        
-        var row = createParamRowFromData(paramData);
-        var selectEl = row.querySelector('.param-name');
-        selectEl.value = paramData.name;
-        onParamChange(selectEl);
+        var pd = allParams[params[i]];
+        if (!pd) continue;
+        var row = createParameterRow();
+        row.querySelector('.param-name').value = pd.name;
+        onParamChange(row.querySelector('.param-name'));
         container.appendChild(row);
     }
-    
-    updateBatchNumber();
+    updateBatchPreview();
     closeWorksheet();
 }
 
 function clearAllParameters() {
-    if (confirm('Clear all loaded parameters and reset batch? This cannot be undone.')) {
-        var container = document.getElementById('parametersContainer');
-        container.innerHTML = '';
-        var row = createParameterRow();
-        container.appendChild(row);
+    if (confirm('Clear all loaded parameters? This cannot be undone.')) {
+        document.getElementById('parametersContainer').innerHTML = '';
+        document.getElementById('parametersContainer').appendChild(createParameterRow());
         document.getElementById('formulaSelect').value = '';
         document.getElementById('batchNumberInput').value = '';
         document.getElementById('batchFormatHint').textContent = '';
     }
 }
 
-function createParamRowFromData(paramData) {
-    return createParameterRow();
-}
-
-// ============================================
-// AUTO-CALC FORMULAS
-// ============================================
-function findParamRow(paramName) {
-    var rows = document.querySelectorAll('.parameter-row');
-    for (var i = 0; i < rows.length; i++) {
-        var select = rows[i].querySelector('.param-name');
-        if (select && select.value.toUpperCase() === paramName.toUpperCase()) {
-            return rows[i];
-        }
-    }
-    return null;
-}
-
-function getParamValue(paramName) {
-    var row = findParamRow(paramName);
-    if (row) {
-        var resultInput = row.querySelector('.param-result');
-        if (resultInput && resultInput.value && !resultInput.hasAttribute('data-auto')) {
-            return parseFloat(resultInput.value);
-        }
-    }
-    return null;
-}
-
-function setParamValue(paramName, value) {
-    var row = findParamRow(paramName);
-    if (row) {
-        var resultInput = row.querySelector('.param-result');
-        if (resultInput) {
-            resultInput.value = value.toFixed(2);
-            resultInput.classList.add('bg-blue-50', 'border-blue-300');
-            resultInput.setAttribute('data-auto', 'true');
-            resultInput.setAttribute('readonly', 'readonly');
-            resultInput.title = 'Auto-calculated value';
-            
-            var select = row.querySelector('.param-name');
-            if (select) onParamChange(select);
-            return true;
-        }
-    }
-    return false;
-}
-
-function runAutoCalculations() {
-    // %SALT = SALT * 0.08
-    var saltVal = getParamValue('SALT');
-    if (saltVal !== null) {
-        setParamValue('%SALT', saltVal * 0.08);
-    }
-    
-    // BOSTWICK = (TEMPERATURE * 0.013) + (BRIX * 0.08) + 2.98
-    var tempVal = getParamValue('TEMPERATURE');
-    var brixVal = getParamValue('BRIX');
-    if (tempVal !== null && brixVal !== null) {
-        setParamValue('BOSTWICK', (tempVal * 0.013) + (brixVal * 0.08) + 2.98);
-    }
-}
-
-// ============================================
-// DYNAMIC PARAMETERS
-// ============================================
 function createParameterRow() {
     var row = document.createElement('div');
     row.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
-    
-    var options = '<option value="">Select parameter...</option>';
-    for (var key in allParams) {
-        if (allParams.hasOwnProperty(key)) {
-            var p = allParams[key];
-            options += '<option value="' + p.name + '" data-unit="' + (p.unit || '') + '" data-min="' + (p.min !== null ? p.min : '') + '" data-max="' + (p.max !== null ? p.max : '') + '">' + p.name + '</option>';
+    var opts = '<option value="">Select parameter...</option>';
+    for (var k in allParams) {
+        if (allParams.hasOwnProperty(k)) {
+            var p = allParams[k];
+            opts += '<option value="' + p.name + '" data-unit="' + (p.unit||'') + '" data-min="' + (p.min!==null?p.min:'') + '" data-max="' + (p.max!==null?p.max:'') + '">' + p.name + '</option>';
         }
     }
-    
-    row.innerHTML = '<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">' + options + '</select></div>' +
+    row.innerHTML = '<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">' + opts + '</select></div>' +
         '<div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div>' +
         '<div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
         '<div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec range" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
         '<div class="col-span-2"><button type="button" onclick="removeParameter(this)" class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button></div>';
-    
     return row;
 }
 
-function addParameter() {
-    document.getElementById('parametersContainer').appendChild(createParameterRow());
-}
+function addParameter() { document.getElementById('parametersContainer').appendChild(createParameterRow()); }
 
-function removeParameter(button) {
-    var container = document.getElementById('parametersContainer');
-    if (container.querySelectorAll('.parameter-row').length > 1) {
-        button.closest('.parameter-row').remove();
-        runAutoCalculations();
-    }
+function removeParameter(btn) {
+    var c = document.getElementById('parametersContainer');
+    if (c.querySelectorAll('.parameter-row').length > 1) { btn.closest('.parameter-row').remove(); runAutoCalculations(); }
 }
 
 function onParamChange(select) {
     var row = select.closest('.parameter-row');
-    var unitInput = row.querySelector('.param-unit');
-    var specInput = row.querySelector('.param-spec');
-    var resultInput = row.querySelector('.param-result');
+    var unitEl = row.querySelector('.param-unit');
+    var specEl = row.querySelector('.param-spec');
+    var resEl = row.querySelector('.param-result');
+    var opt = select.options[select.selectedIndex];
+    var unit = opt.getAttribute('data-unit') || '';
+    var min = opt.getAttribute('data-min') || '';
+    var max = opt.getAttribute('data-max') || '';
+    unitEl.value = unit;
+    if (min && max) specEl.value = min + ' - ' + max;
+    else if (min) specEl.value = '\u2265 ' + min;
+    else if (max) specEl.value = '\u2264 ' + max;
+    else specEl.value = '';
     
-    var selectedOption = select.options[select.selectedIndex];
-    var unit = selectedOption.getAttribute('data-unit') || '';
-    var min = selectedOption.getAttribute('data-min') || '';
-    var max = selectedOption.getAttribute('data-max') || '';
-    
-    unitInput.value = unit;
-    
-    if (min && max) {
-        specInput.value = min + ' - ' + max;
-    } else if (min) {
-        specInput.value = '\u2265 ' + min;
-    } else if (max) {
-        specInput.value = '\u2264 ' + max;
-    } else {
-        specInput.value = '';
+    var nm = select.value.toUpperCase();
+    if (allParams[nm] && allParams[nm].auto) {
+        resEl.classList.add('bg-blue-50', 'border-blue-300');
+        resEl.setAttribute('data-auto', 'true');
+        resEl.setAttribute('readonly', 'readonly');
+        resEl.title = 'Auto-calculated value';
     }
-    
-    // Mark auto-calc fields
-    var paramName = select.value.toUpperCase();
-    if (allParams[paramName] && allParams[paramName].auto) {
-        resultInput.classList.add('bg-blue-50', 'border-blue-300');
-        resultInput.setAttribute('data-auto', 'true');
-        resultInput.setAttribute('readonly', 'readonly');
-        resultInput.title = 'Auto-calculated value';
-    }
-    
-    // Validate
-    resultInput.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
-    if (resultInput.getAttribute('data-auto') === 'true') {
-        resultInput.classList.add('bg-blue-50', 'border-blue-300');
-    }
-    if (resultInput.value && min && max) {
-        var val = parseFloat(resultInput.value);
-        if (!isNaN(val)) {
-            if (val >= parseFloat(min) && val <= parseFloat(max)) {
-                resultInput.classList.add('border-green-500', 'bg-green-50');
-            } else {
-                resultInput.classList.add('border-red-500', 'bg-red-50');
-            }
+    resEl.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
+    if (resEl.getAttribute('data-auto') === 'true') resEl.classList.add('bg-blue-50', 'border-blue-300');
+    if (resEl.value && min && max) {
+        var v = parseFloat(resEl.value);
+        if (!isNaN(v)) {
+            if (v >= parseFloat(min) && v <= parseFloat(max)) resEl.classList.add('border-green-500', 'bg-green-50');
+            else resEl.classList.add('border-red-500', 'bg-red-50');
         }
     }
+}
+
+function getParamValue(name) {
+    var rows = document.querySelectorAll('.parameter-row');
+    for (var i = 0; i < rows.length; i++) {
+        var s = rows[i].querySelector('.param-name');
+        if (s && s.value.toUpperCase() === name.toUpperCase()) {
+            var r = rows[i].querySelector('.param-result');
+            if (r && r.value && !r.hasAttribute('data-auto')) return parseFloat(r.value);
+        }
+    }
+    return null;
+}
+
+function setParamValue(name, val) {
+    var rows = document.querySelectorAll('.parameter-row');
+    for (var i = 0; i < rows.length; i++) {
+        var s = rows[i].querySelector('.param-name');
+        if (s && s.value.toUpperCase() === name.toUpperCase()) {
+            var r = rows[i].querySelector('.param-result');
+            if (r) {
+                r.value = val.toFixed(2);
+                r.classList.add('bg-blue-50', 'border-blue-300');
+                r.setAttribute('data-auto', 'true');
+                r.setAttribute('readonly', 'readonly');
+                r.title = 'Auto-calculated value';
+                onParamChange(s);
+            }
+            return;
+        }
+    }
+}
+
+function runAutoCalculations() {
+    var sv = getParamValue('SALT');
+    if (sv !== null) setParamValue('%SALT', sv * 0.08);
+    var tv = getParamValue('TEMPERATURE');
+    var bv = getParamValue('BRIX');
+    if (tv !== null && bv !== null) setParamValue('BOSTWICK', (tv * 0.013) + (bv * 0.08) + 2.98);
 }
 
 function onResultInput(input) {
     if (input.getAttribute('data-auto') === 'true') return;
-    
-    var row = input.closest('.parameter-row');
-    var select = row.querySelector('.param-name');
-    if (select && select.value) onParamChange(select);
-    
+    var s = input.closest('.parameter-row').querySelector('.param-name');
+    if (s && s.value) onParamChange(s);
     runAutoCalculations();
 }
 
-// ============================================
-// TREND CHART
-// ============================================
+// Trend chart
 var trendChart = null;
-
-var allTests = [
-    {% for test in recent_tests %}
-    {
-        id: {{ test.id }},
-        batch: "{{ test.batch_number }}",
-        formula_id: {{ test.formula_id }},
-        formula_code: "{{ test.formula.code if test.formula else 'N/A' }}",
-        date: "{{ test.test_date.strftime('%Y-%m-%d') if test.test_date else '' }}",
-        status: "{{ test.status }}",
-        parameters: {{ test.parameters | safe if test.parameters else '[]' }}
-    },
-    {% endfor %}
-];
-
+var allTests = [{% for test in recent_tests %}{id:{{test.id}},batch:"{{test.batch_number}}",formula_id:{{test.formula_id}},formula_code:"{{test.formula.code if test.formula else 'N/A'}}",date:"{{test.test_date.strftime('%Y-%m-%d') if test.test_date else ''}}",status:"{{test.status}}",parameters:{{test.parameters|safe if test.parameters else '[]'}}},{% endfor %}];
 allTests.reverse();
-
-var chartColors = [
-    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
-    '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
-    '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
-];
+var chartColors = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#14B8A6','#E11D48','#7C3AED','#0891B2','#D97706','#059669'];
 
 function buildParamDropdown() {
-    var paramSet = new Set();
-    allTests.forEach(function(test) {
-        if (test.parameters) {
-            var params = test.parameters;
-            if (typeof params === 'string') {
-                try { params = JSON.parse(params); } catch(e) { return; }
-            }
-            params.forEach(function(p) {
-                if (p.name) paramSet.add(p.name);
-            });
-        }
+    var set = new Set();
+    allTests.forEach(function(t) {
+        var p = t.parameters;
+        if (typeof p === 'string') { try { p = JSON.parse(p); } catch(e) { return; } }
+        if (p) p.forEach(function(x) { if (x.name) set.add(x.name); });
     });
-    
-    var select = document.getElementById('trendParamFilter');
-    select.innerHTML = '<option value="all">All Parameters</option>';
-    paramSet.forEach(function(param) {
-        select.innerHTML += '<option value="' + param + '">' + param + '</option>';
-    });
+    var s = document.getElementById('trendParamFilter');
+    s.innerHTML = '<option value="all">All Parameters</option>';
+    set.forEach(function(x) { s.innerHTML += '<option value="'+x+'">'+x+'</option>'; });
 }
 
 function updateTrendChart() {
-    var formulaFilter = document.getElementById('trendFormulaFilter').value;
-    var paramFilter = document.getElementById('trendParamFilter').value;
-    
-    var filteredTests = allTests;
-    if (formulaFilter !== 'all') {
-        filteredTests = filteredTests.filter(function(t) { return t.formula_id == formulaFilter; });
-    }
-    
-    var datasets = {};
-    filteredTests.forEach(function(test, testIndex) {
-        if (test.parameters) {
-            var params = test.parameters;
-            if (typeof params === 'string') {
-                try { params = JSON.parse(params); } catch(e) { return; }
+    var ff = document.getElementById('trendFormulaFilter').value;
+    var pf = document.getElementById('trendParamFilter').value;
+    var ft = allTests;
+    if (ff !== 'all') ft = ft.filter(function(t) { return t.formula_id == ff; });
+    var ds = {};
+    ft.forEach(function(t, i) {
+        var p = t.parameters;
+        if (typeof p === 'string') { try { p = JSON.parse(p); } catch(e) { return; } }
+        if (!p) return;
+        p.forEach(function(x) {
+            if (!x.name) return;
+            if (pf !== 'all' && x.name !== pf) return;
+            var v = parseFloat(x.result);
+            if (isNaN(v)) return;
+            if (!ds[x.name]) {
+                ds[x.name] = {label: x.name + (x.unit?' ('+x.unit+')':''), data: [], borderColor: chartColors[Object.keys(ds).length % chartColors.length], backgroundColor: chartColors[Object.keys(ds).length % chartColors.length]+'20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6};
             }
-            params.forEach(function(p) {
-                if (!p.name) return;
-                if (paramFilter !== 'all' && p.name !== paramFilter) return;
-                
-                var resultVal = parseFloat(p.result);
-                if (isNaN(resultVal)) return;
-                
-                if (!datasets[p.name]) {
-                    var colorIndex = Object.keys(datasets).length % chartColors.length;
-                    var label = p.name;
-                    if (p.unit) label += ' (' + p.unit + ')';
-                    
-                    datasets[p.name] = {
-                        label: label,
-                        data: [],
-                        borderColor: chartColors[colorIndex],
-                        backgroundColor: chartColors[colorIndex] + '20',
-                        borderWidth: 2,
-                        tension: 0.3,
-                        fill: false,
-                        pointRadius: 4,
-                        pointHoverRadius: 6
-                    };
-                }
-                
-                while (datasets[p.name].data.length < testIndex) {
-                    datasets[p.name].data.push(null);
-                }
-                datasets[p.name].data.push(resultVal);
-            });
-        }
+            while (ds[x.name].data.length < i) ds[x.name].data.push(null);
+            ds[x.name].data.push(v);
+        });
     });
-    
-    var labels = filteredTests.map(function(t) { return t.batch; });
-    
+    var labels = ft.map(function(t) { return t.batch; });
     if (trendChart) trendChart.destroy();
-    
     var ctx = document.getElementById('trendChart').getContext('2d');
-    
-    if (Object.keys(datasets).length === 0) {
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        return;
-    }
-    
-    trendChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: labels, datasets: Object.values(datasets) },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { intersect: false, mode: 'index' },
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { usePointStyle: true, padding: 20, font: { size: 11 } }
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Batch', font: { size: 11 } },
-                    ticks: { maxRotation: 45, font: { size: 10 } }
-                },
-                y: {
-                    title: { display: true, text: 'Result Value', font: { size: 11 } },
-                    beginAtZero: false,
-                    ticks: { font: { size: 10 } }
-                }
-            }
-        }
-    });
+    var arr = Object.values(ds);
+    if (arr.length === 0) { ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); return; }
+    trendChart = new Chart(ctx, {type:'line', data:{labels:labels, datasets:arr}, options:{responsive:true, maintainAspectRatio:false, interaction:{intersect:false, mode:'index'}, plugins:{legend:{position:'bottom', labels:{usePointStyle:true, padding:20, font:{size:11}}}}, scales:{x:{title:{display:true, text:'Batch', font:{size:11}}, ticks:{maxRotation:45, font:{size:10}}}, y:{title:{display:true, text:'Result Value', font:{size:11}}, beginAtZero:false, ticks:{font:{size:10}}}}}});
 }
 
-document.getElementById('worksheetModal').addEventListener('click', function(e) {
-    if (e.target === this) closeWorksheet();
-});
+document.getElementById('worksheetModal').addEventListener('click', function(e) { if (e.target === this) closeWorksheet(); });
 
 document.addEventListener('DOMContentLoaded', function() {
     updateLiveClock();
@@ -772,5 +491,4 @@ document.addEventListener('DOMContentLoaded', function() {
     if (allTests.length > 0) updateTrendChart();
 });
 </script>
-
 {% endblock %}
