@@ -194,30 +194,131 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
 <script>
-var allParams = {
-    'TEMPERATURE': { name: 'TEMPERATURE', unit: '°C', min: 0, max: 200 },
-    'BRIX': { name: 'BRIX', unit: '°Bx', min: 0, max: 100 },
-    'SALT': { name: 'SALT', unit: '%', min: 0, max: 100 },
-    '%SALT': { name: '%SALT', unit: '%', min: 0, max: 100, auto: true },
-    'COLOUR': { name: 'COLOUR', unit: '', min: null, max: null },
-    'BRIGHTNESS': { name: 'BRIGHTNESS', unit: '%', min: 0, max: 100 },
-    'pH': { name: 'pH', unit: '', min: 0, max: 14 },
-    'ACIDITY': { name: 'ACIDITY', unit: '%', min: 0, max: 100 },
-    'BOSTWICK': { name: 'BOSTWICK', unit: 'cm', min: 0, max: 30, auto: true },
-    'APPEARANCE': { name: 'APPEARANCE', unit: '', min: null, max: null },
-    'MOISTURE': { name: 'MOISTURE', unit: '%', min: 0, max: 100 }
+// ============================================
+// PRODUCT CLASSIFICATION
+// ============================================
+// Tomato Paste: F-021A, F-021C, F-022, F-024, F-025
+// Tomato Mix: F-021B, F-023
+// Other products: everything else
+
+var tomatoPasteCodes = ['F-021A', 'F-021C', 'F-022', 'F-024', 'F-025'];
+var tomatoMixCodes = ['F-021B', 'F-023'];
+var allTomatoCodes = tomatoPasteCodes.concat(tomatoMixCodes);
+
+function getProductType(code) {
+    if (tomatoPasteCodes.indexOf(code) !== -1) return 'paste';
+    if (tomatoMixCodes.indexOf(code) !== -1) return 'mix';
+    return 'other';
+}
+
+// ============================================
+// BASE PARAMETER DEFINITIONS (units, auto flags)
+// ============================================
+var baseParams = {
+    'TEMPERATURE': { unit: '°C' },
+    'BRIX': { unit: '°Bx' },
+    'SALT': { unit: '%' },
+    '%SALT': { unit: '%', auto: true },
+    'COLOUR': { unit: '' },
+    'BRIGHTNESS': { unit: '%' },
+    'pH': { unit: '' },
+    'ACIDITY': { unit: '%' },
+    'BOSTWICK': { unit: 'cm', auto: true },
+    'APPEARANCE': { unit: '' },
+    'MOISTURE': { unit: '%' }
 };
 
-var tomatoPasteCodes = ['F-021A', 'F-021B', 'F-021C', 'F-022', 'F-023', 'F-024', 'F-025'];
+// ============================================
+// SPEC RANGES BY PRODUCT TYPE
+// ============================================
+var specsPaste = {
+    'TEMPERATURE': { min: 60, max: 85 },
+    'BRIX': { min: 20, max: 30 },
+    'SALT': { min: 1, max: null, note: 'Must be less than BRIX value' },
+    '%SALT': { min: null, max: null },
+    'COLOUR': { min: 1.5, max: null },
+    'BRIGHTNESS': { min: null, max: null },
+    'pH': { min: 3.6, max: 4.5 },
+    'ACIDITY': { min: null, max: 2.5 },
+    'BOSTWICK': { min: null, max: null },
+    'APPEARANCE': { min: null, max: null },
+    'MOISTURE': { min: null, max: null }
+};
+
+var specsMix = {
+    'TEMPERATURE': { min: 60, max: 85 },
+    'BRIX': { min: 13, max: 21 },
+    'SALT': { min: 1, max: null, note: 'Must be less than BRIX value' },
+    '%SALT': { min: null, max: null },
+    'COLOUR': { min: 1.5, max: null },
+    'BRIGHTNESS': { min: null, max: null },
+    'pH': { min: 3.6, max: 4.5 },
+    'ACIDITY': { min: null, max: 2.5 },
+    'BOSTWICK': { min: null, max: null },
+    'APPEARANCE': { min: null, max: null },
+    'MOISTURE': { min: null, max: null }
+};
+
+var specsOther = {
+    'TEMPERATURE': { min: null, max: null },
+    'BRIX': { min: null, max: null },
+    'SALT': { min: null, max: null },
+    '%SALT': { min: null, max: null },
+    'COLOUR': { min: null, max: null },
+    'BRIGHTNESS': { min: null, max: null },
+    'pH': { min: 5.5, max: 7.5 },
+    'ACIDITY': { min: null, max: null },
+    'BOSTWICK': { min: null, max: null },
+    'APPEARANCE': { min: null, max: null },
+    'MOISTURE': { min: null, max: 5.0 }
+};
+
+// Tomato paste params list (order)
 var tomatoPasteParams = ['TEMPERATURE', 'BRIX', 'SALT', '%SALT', 'COLOUR', 'BRIGHTNESS', 'pH', 'ACIDITY', 'BOSTWICK'];
+var tomatoMixParams = ['TEMPERATURE', 'BRIX', 'SALT', '%SALT', 'COLOUR', 'BRIGHTNESS', 'pH', 'ACIDITY', 'BOSTWICK'];
 var otherParams = ['APPEARANCE', 'pH', 'ACIDITY', 'MOISTURE'];
 
+function getSpecs(code) {
+    var type = getProductType(code);
+    if (type === 'paste') return specsPaste;
+    if (type === 'mix') return specsMix;
+    return specsOther;
+}
+
+function getParamList(code) {
+    var type = getProductType(code);
+    if (type === 'paste') return tomatoPasteParams;
+    if (type === 'mix') return tomatoMixParams;
+    return otherParams;
+}
+
+function buildAllParams(code) {
+    var specs = getSpecs(code);
+    var result = {};
+    for (var key in baseParams) {
+        if (baseParams.hasOwnProperty(key)) {
+            var bp = baseParams[key];
+            var sp = specs[key] || { min: null, max: null };
+            result[key] = {
+                name: key,
+                unit: bp.unit,
+                min: sp.min,
+                max: sp.max,
+                auto: bp.auto || false,
+                note: sp.note || ''
+            };
+        }
+    }
+    return result;
+}
+
+// ============================================
+// SHIFT & CLOCK
+// ============================================
 function getCurrentShift() {
     var h = new Date().getHours();
     return (h >= 7 && h < 19) ? 'A' : 'B';
 }
-
-function isTomatoProduct(code) { return tomatoPasteCodes.indexOf(code) !== -1; }
 
 function updateBatchPreview() {
     var select = document.getElementById('formulaSelect');
@@ -229,7 +330,7 @@ function updateBatchPreview() {
     
     var now = new Date();
     var shift = getCurrentShift();
-    var isTomato = isTomatoProduct(code);
+    var isTomato = allTomatoCodes.indexOf(code) !== -1;
     
     if (isTomato) {
         var dd = String(now.getDate()).padStart(2, '0');
@@ -264,34 +365,43 @@ function updateLiveClock() {
     document.getElementById('testDateInput').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + h + ':' + m;
 }
 
+// ============================================
+// FORMULA CHANGE
+// ============================================
+var currentFormulaCode = '';
+
 function onFormulaChange() {
     var select = document.getElementById('formulaSelect');
     var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
+    currentFormulaCode = code;
     if (code) {
-        var isTomato = isTomatoProduct(code);
-        showWorksheet(code, select.options[select.selectedIndex].text, isTomato ? tomatoPasteParams : otherParams, isTomato);
+        var params = getParamList(code);
+        var type = getProductType(code);
+        var typeLabel = type === 'paste' ? '🍅 Tomato Paste' : (type === 'mix' ? '🥫 Tomato Mix' : '📦 Dry Food / Seasoning / Cube');
+        showWorksheet(code, select.options[select.selectedIndex].text, params, typeLabel);
     }
     updateBatchPreview();
 }
 
 function reopenWorksheet() {
-    var select = document.getElementById('formulaSelect');
-    if (select.selectedIndex > 0) onFormulaChange();
+    if (currentFormulaCode) onFormulaChange();
     else alert('Please select a formula first.');
 }
 
-function showWorksheet(code, name, params, isTomato) {
+function showWorksheet(code, name, params, typeLabel) {
+    var allP = buildAllParams(code);
     var html = '<div class="mb-3"><span class="font-semibold">' + code + '</span> - ' + name + '</div>';
-    html += '<div class="text-xs text-gray-500 mb-3">Product Type: ' + (isTomato ? '🍅 Tomato Paste / Mix' : '📦 Dry Food / Seasoning / Cube') + '</div>';
+    html += '<div class="text-xs text-gray-500 mb-3">Product Type: ' + typeLabel + '</div>';
     html += '<div class="text-xs text-gray-400 mb-2">' + params.length + ' parameters will be loaded</div>';
     html += '<div class="border rounded-lg overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Parameter</th><th class="px-3 py-2 text-left">Unit</th><th class="px-3 py-2 text-left">Spec Range</th></tr></thead><tbody>';
     for (var i = 0; i < params.length; i++) {
-        var p = allParams[params[i]];
+        var p = allP[params[i]];
         if (!p) continue;
         var spec = '-';
         if (p.min !== null && p.max !== null) spec = p.min + ' - ' + p.max;
         else if (p.min !== null) spec = '\u2265 ' + p.min;
         else if (p.max !== null) spec = '\u2264 ' + p.max;
+        if (p.note) spec += ' (' + p.note + ')';
         html += '<tr class="border-t"><td class="px-3 py-1 text-gray-400 text-xs">' + (i+1) + '</td><td class="px-3 py-1 font-medium">' + p.name + (p.auto ? ' ⚡' : '') + '</td><td class="px-3 py-1 text-gray-500">' + (p.unit || '-') + '</td><td class="px-3 py-1 text-gray-500">' + spec + '</td></tr>';
     }
     html += '</tbody></table></div><div class="text-xs text-gray-400 mt-2">⚡ = Auto-calculated value</div>';
@@ -302,16 +412,15 @@ function showWorksheet(code, name, params, isTomato) {
 function closeWorksheet() { document.getElementById('worksheetModal').classList.add('hidden'); }
 
 function loadWorksheetToForm() {
-    var select = document.getElementById('formulaSelect');
-    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
-    if (!code) { closeWorksheet(); return; }
-    var params = isTomatoProduct(code) ? tomatoPasteParams : otherParams;
+    if (!currentFormulaCode) { closeWorksheet(); return; }
+    var params = getParamList(currentFormulaCode);
+    var allP = buildAllParams(currentFormulaCode);
     var container = document.getElementById('parametersContainer');
     container.innerHTML = '';
     for (var i = 0; i < params.length; i++) {
-        var pd = allParams[params[i]];
+        var pd = allP[params[i]];
         if (!pd) continue;
-        var row = createParameterRow();
+        var row = createParameterRow(currentFormulaCode);
         row.querySelector('.param-name').value = pd.name;
         onParamChange(row.querySelector('.param-name'));
         container.appendChild(row);
@@ -323,21 +432,23 @@ function loadWorksheetToForm() {
 function clearAllParameters() {
     if (confirm('Clear all loaded parameters? This cannot be undone.')) {
         document.getElementById('parametersContainer').innerHTML = '';
-        document.getElementById('parametersContainer').appendChild(createParameterRow());
+        document.getElementById('parametersContainer').appendChild(createParameterRow(''));
         document.getElementById('formulaSelect').value = '';
         document.getElementById('batchNumberInput').value = '';
         document.getElementById('batchFormatHint').textContent = '';
+        currentFormulaCode = '';
     }
 }
 
-function createParameterRow() {
+function createParameterRow(code) {
+    var allP = buildAllParams(code || currentFormulaCode || '');
     var row = document.createElement('div');
     row.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
     var opts = '<option value="">Select parameter...</option>';
-    for (var k in allParams) {
-        if (allParams.hasOwnProperty(k)) {
-            var p = allParams[k];
-            opts += '<option value="' + p.name + '" data-unit="' + (p.unit||'') + '" data-min="' + (p.min!==null?p.min:'') + '" data-max="' + (p.max!==null?p.max:'') + '">' + p.name + '</option>';
+    for (var k in allP) {
+        if (allP.hasOwnProperty(k)) {
+            var p = allP[k];
+            opts += '<option value="' + p.name + '" data-unit="' + (p.unit||'') + '" data-min="' + (p.min!==null?p.min:'') + '" data-max="' + (p.max!==null?p.max:'') + '" data-note="' + (p.note||'') + '">' + p.name + '</option>';
         }
     }
     row.innerHTML = '<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">' + opts + '</select></div>' +
@@ -348,7 +459,9 @@ function createParameterRow() {
     return row;
 }
 
-function addParameter() { document.getElementById('parametersContainer').appendChild(createParameterRow()); }
+function addParameter() { 
+    document.getElementById('parametersContainer').appendChild(createParameterRow(currentFormulaCode)); 
+}
 
 function removeParameter(btn) {
     var c = document.getElementById('parametersContainer');
@@ -364,14 +477,18 @@ function onParamChange(select) {
     var unit = opt.getAttribute('data-unit') || '';
     var min = opt.getAttribute('data-min') || '';
     var max = opt.getAttribute('data-max') || '';
+    var note = opt.getAttribute('data-note') || '';
+    
     unitEl.value = unit;
     if (min && max) specEl.value = min + ' - ' + max;
     else if (min) specEl.value = '\u2265 ' + min;
     else if (max) specEl.value = '\u2264 ' + max;
     else specEl.value = '';
+    if (note) specEl.value += ' (' + note + ')';
     
     var nm = select.value.toUpperCase();
-    if (allParams[nm] && allParams[nm].auto) {
+    var allP = buildAllParams(currentFormulaCode);
+    if (allP[nm] && allP[nm].auto) {
         resEl.classList.add('bg-blue-50', 'border-blue-300');
         resEl.setAttribute('data-auto', 'true');
         resEl.setAttribute('readonly', 'readonly');
@@ -384,6 +501,28 @@ function onParamChange(select) {
         if (!isNaN(v)) {
             if (v >= parseFloat(min) && v <= parseFloat(max)) resEl.classList.add('border-green-500', 'bg-green-50');
             else resEl.classList.add('border-red-500', 'bg-red-50');
+        }
+    }
+    // SALT special validation: must be less than BRIX
+    if (nm === 'SALT') {
+        validateSaltVsBrix(resEl);
+    }
+}
+
+function validateSaltVsBrix(saltInput) {
+    var rows = document.querySelectorAll('.parameter-row');
+    var brixVal = null;
+    for (var i = 0; i < rows.length; i++) {
+        var s = rows[i].querySelector('.param-name');
+        if (s && s.value.toUpperCase() === 'BRIX') {
+            var r = rows[i].querySelector('.param-result');
+            if (r && r.value) brixVal = parseFloat(r.value);
+        }
+    }
+    if (brixVal !== null && saltInput.value) {
+        var saltVal = parseFloat(saltInput.value);
+        if (!isNaN(saltVal) && saltVal >= brixVal) {
+            saltInput.classList.add('border-red-500', 'bg-red-50');
         }
     }
 }
