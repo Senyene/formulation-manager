@@ -610,7 +610,7 @@ def _generate_batch_number(formula):
     now = datetime.utcnow()
     hours = now.hour
     shift = 'A' if 7 <= hours < 19 else 'B'
-    is_tomato = formula and formula.code in ['F-021', 'F-022', 'F-023', 'F-024', 'F-025']
+    is_tomato = formula and formula.code in ['F-021A', 'F-021B', 'F-021C', 'F-022', 'F-023', 'F-024', 'F-025']
     
     if is_tomato:
         prefix = now.strftime('%d%m') + '-' + shift + '-'
@@ -886,19 +886,28 @@ def _seed_formulas():
         db.session.add(f); db.session.flush()
         add_ings(f, ings)
     
-    # TOMATO PASTES
-    f = Formula(code='F-021', name='Ric-giko/Tomagood/Erisco Tomato Paste', version='1.0', status='approved', created_by='system')
+       # TOMATO PASTES
+    # F-021 split into 3 individual formulas (same formulation)
+    tomato_021_ings = [('Concentrate', 480), ('Water', 1960), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium ascorbate', 0.2)]
+    
+    f = Formula(code='F-021A', name='Ric-giko Tomato Paste', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
-    add_ings(f, [('Concentrate', 480), ('Water', 1960), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium ascorbate', 0.2)])
+    add_ings(f, tomato_021_ings)
+    
+    f = Formula(code='F-021B', name='Tomagood Tomato Mix', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, tomato_021_ings)
+    
+    f = Formula(code='F-021C', name='Erisco (Normal) Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, tomato_021_ings)
+
     f = Formula(code='F-022', name='Erisco Tomato Paste', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Concentrate', 720), ('Water', 1960), ('Fibre', 180), ('Sugar', 150), ('Salt', 60), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 6), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.075), ('Colour (Sunset Yellow)', 0.061), ('Colour (Allura Red)', 0.009), ('Stabilizer (CMC)', 0.067), ('Maltdextrin', 6), ('Sodium ascorbate', 2)])
-    f = Formula(code='F-023', name='Nagiko Tomato Paste', version='1.0', status='approved', created_by='system')
+    f = Formula(code='F-023', name='Nagiko Tomato Mix', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Tomato concentrate', 330), ('Water', 2110), ('Fibre', 200), ('Sugar', 75), ('Salt', 40), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 3), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6)])
-    f = Formula(code='F-024', name='Erisco Party Jollof Tomato Paste', version='1.0', status='approved', created_by='system')
-    db.session.add(f); db.session.flush()
-    add_ings(f, [('Concentrate', 480), ('Water', 1960), ('Chicken powder', 8), ('Chicken oil', 0.5), ('Garlic', 6), ('Ginger', 5), ('Tumeric', 5), ('Onion powder', 40), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 25), ('Colour (Sunset Yellow)', 0.157), ('Colour (Allura Red)', 0.208), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium erythrobate', 0.2), ('Pepper', 8), ('Palm oil', 3)])
     f = Formula(code='F-025', name='Erisco So Red Ketchup', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Tomato concentrate', 233), ('Fibre', 30), ('Sugar', 253), ('Salt', 30), ('Citric acid', 10), ('Potassium sorbate', 4.5), ('Onion powder', 3), ('Colour (Erythrosine)', 0.035), ('Colour (Ponceau 4R)', 0.015), ('Acetic acid', 5), ('Corn starch', 20), ('Water', 940)])
