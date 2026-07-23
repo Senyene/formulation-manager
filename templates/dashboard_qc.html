@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <span class="text-gray-600">QC Lab</span>
+{% endblock %}
 
 <!-- Flash Messages -->
 {% with messages = get_flashed_messages() %}
@@ -154,7 +157,10 @@
 
 <!-- Recent Submissions Table -->
 <div class="bg-white rounded-lg shadow p-6">
-    <h2 class="text-xl font-bold mb-4">📊 Recent Test Submissions</h2>
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-bold">📊 Recent Test Submissions</h2>
+        <a href="{{ url_for('export_qc_results') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print">📥 Export CSV</a>
+    </div>
     {% if recent_tests %}
     <div class="overflow-x-auto">
         <table class="w-full text-sm">

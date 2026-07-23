@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <span class="text-gray-600">R&D Lab</span>
+{% endblock %}
 
 {% with messages = get_flashed_messages() %}
     {% if messages %}
@@ -103,7 +106,10 @@
     
     <!-- Formula Management -->
     <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-xl font-bold mb-4">📋 My Formulas</h2>
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-xl font-bold">📋 My Formulas</h2>
+            <a href="{{ url_for('export_formulas') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print">📥 Export CSV</a>
+        </div>
         
         {% if formulas %}
         <div class="space-y-4">
@@ -115,13 +121,16 @@
                         <span class="text-gray-600">- {{ formula.name }}</span>
                         <span class="text-xs text-gray-400">v{{ formula.version }}</span>
                     </div>
-                    <span class="text-xs px-2 py-1 rounded font-medium
-                        {% if formula.status == 'approved' %}bg-green-200 text-green-800
-                        {% elif formula.status == 'pending_approval' %}bg-yellow-200 text-yellow-800
-                        {% elif formula.status == 'archived' %}bg-gray-300 text-gray-600
-                        {% else %}bg-blue-200 text-blue-800{% endif %}">
-                        {{ formula.status|upper|replace('_', ' ') }}
-                    </span>
+                    <div class="flex items-center gap-1">
+                        <a href="{{ url_for('export_single_formula', formula_id=formula.id) }}" class="text-gray-400 hover:text-green-500 text-xs no-print" title="Export formula">📥</a>
+                        <span class="text-xs px-2 py-1 rounded font-medium
+                            {% if formula.status == 'approved' %}bg-green-200 text-green-800
+                            {% elif formula.status == 'pending_approval' %}bg-yellow-200 text-yellow-800
+                            {% elif formula.status == 'archived' %}bg-gray-300 text-gray-600
+                            {% else %}bg-blue-200 text-blue-800{% endif %}">
+                            {{ formula.status|upper|replace('_', ' ') }}
+                        </span>
+                    </div>
                 </div>
                 
                 <!-- Ingredients List -->
@@ -206,12 +215,12 @@
                 <!-- Status Change Buttons -->
                 <div class="flex gap-2 mt-3 pt-2 border-t">
                     {% if formula.status == 'draft' and formula.ingredients %}
-                    <form method="POST" action="{{ url_for('submit_for_approval', formula_id=formula.id) }}" class="inline">
+                    <form method="POST" action="{{ url_for('submit_for_approval', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Submit this formula for MD approval? This cannot be undone.')">
                         <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📤 Submit for Approval</button>
                     </form>
                     {% endif %}
                     {% if formula.status == 'draft' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to archive this formula?')">
                         <input type="hidden" name="status" value="archived">
                         <button type="submit" class="bg-gray-400 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
                     </form>
@@ -220,7 +229,7 @@
                     <span class="text-yellow-600 text-xs flex items-center gap-1">⏳ Awaiting MD approval</span>
                     {% endif %}
                     {% if formula.status == 'approved' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to archive this formula?')">
                         <input type="hidden" name="status" value="archived">
                         <button type="submit" class="bg-gray-500 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
                     </form>
@@ -229,7 +238,7 @@
                     {% endif %}
                     {% endif %}
                     {% if formula.status == 'archived' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline">
+                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to reactivate this formula?')">
                         <input type="hidden" name="status" value="draft">
                         <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📝 Reactivate</button>
                     </form>

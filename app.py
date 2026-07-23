@@ -721,6 +721,123 @@ def export_consumption():
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-disposition": "attachment; filename=consumption_report.csv"})
 
 # ============================================
+# EXPORT ROUTES
+# ============================================
+
+@app.route('/export/qc-results')
+@login_required
+def export_qc_results():
+    """Export QC results as CSV (Excel-compatible)."""
+    if current_user.role not in ['qc', 'rd', 'md', 'audit']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    output = io.StringIO()
+    output.write('\ufeff')  # BOM for Excel UTF-8 compatibility
+    writer = csv.writer(output)
+    writer.writerow(['Batch Number', 'Formula Code', 'Formula Name', 'Test Date', 'Tester', 'Status', 'Parameters', 'Notes'])
+    
+    tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).all()
+    for t in tests:
+        params_str = ''
+        if t.parameters:
+            try:
+                params = json.loads(t.parameters)
+                params_str = '; '.join([f"{p.get('name','')}={p.get('result','')}{p.get('unit','')}" for p in params])
+            except:
+                params_str = t.parameters[:200]
+        
+        writer.writerow([
+            t.batch_number,
+            t.formula.code if t.formula else 'N/A',
+            t.formula.name if t.formula else 'N/A',
+            t.test_date.strftime('%Y-%m-%d %H:%M') if t.test_date else '',
+            t.tested_by,
+            t.status.upper(),
+            params_str,
+            t.notes or ''
+        ])
+    
+    output.seek(0)
+    log_action('EXPORT_QC', f'By: {current_user.display_name}')
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=qc_results_export.csv"}
+    )
+
+@app.route('/export/formulas')
+@login_required
+def export_formulas():
+    """Export formulas list as CSV (Excel-compatible)."""
+    if current_user.role not in ['rd', 'md', 'audit']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    output = io.StringIO()
+    output.write('\ufeff')
+    writer = csv.writer(output)
+    
+    if can_view_formula_details():
+        writer.writerow(['Code', 'Name', 'Version', 'Status', 'Batch Size (kg)', 'Created By', 'Created Date', 'Approved By', 'Ingredients'])
+        formulas = Formula.query.order_by(Formula.code).all()
+        for f in formulas:
+            ings = '; '.join([f"{i.material.name if i.material else '?'}: {i.quantity}{i.unit}" for i in f.ingredients])
+            writer.writerow([
+                f.code, f.name, f.version, f.status.upper(), f.batch_size,
+                f.created_by, f.created_at.strftime('%Y-%m-%d') if f.created_at else '',
+                f.approved_by or '', ings
+            ])
+    else:
+        writer.writerow(['Code', 'Name', 'Version', 'Status', 'Created Date'])
+        formulas = Formula.query.order_by(Formula.code).all()
+        for f in formulas:
+            writer.writerow([f.code, f.name, f.version, f.status.upper(), f.created_at.strftime('%Y-%m-%d') if f.created_at else ''])
+    
+    output.seek(0)
+    log_action('EXPORT_FORMULAS', f'By: {current_user.display_name}')
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": "attachment; filename=formulas_export.csv"}
+    )
+
+@app.route('/export/formula/<int:formula_id>')
+@login_required
+def export_single_formula(formula_id):
+    """Export a single formula as CSV."""
+    if current_user.role not in ['rd', 'md', 'audit']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get_or_404(formula_id)
+    
+    output = io.StringIO()
+    output.write('\ufeff')
+    writer = csv.writer(output)
+    
+    if can_view_formula_details():
+        writer.writerow(['Code', 'Name', 'Version', 'Status', 'Batch Size (kg)', 'Created By', 'Created Date', 'Approved By'])
+        writer.writerow([formula.code, formula.name, formula.version, formula.status.upper(), formula.batch_size, formula.created_by, formula.created_at.strftime('%Y-%m-%d') if formula.created_at else '', formula.approved_by or ''])
+        writer.writerow([])
+        writer.writerow(['Ingredient Code', 'Ingredient Name', 'Quantity', 'Unit'])
+        for ing in formula.ingredients:
+            mat = ing.material
+            writer.writerow([mat.code if mat else '?', mat.name if mat else 'Unknown', ing.quantity, ing.unit])
+    else:
+        writer.writerow(['Code', 'Name', 'Version', 'Status'])
+        writer.writerow([formula.code, formula.name, formula.version, formula.status.upper()])
+    
+    output.seek(0)
+    log_action('EXPORT_FORMULA', f'Code: {formula.code}')
+    filename = f"formula_{formula.code}_{formula.name.replace(' ', '_')}.csv"
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-disposition": f"attachment; filename={filename}"}
+    )
+
+# ============================================
 # LOGOUT
 # ============================================
 

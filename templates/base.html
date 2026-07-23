@@ -5,22 +5,75 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Formulation Manager</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @media print {
+            nav, button, form, .no-print, #worksheetModal, #trendChart, canvas, .breadcrumb {
+                display: none !important;
+            }
+            body { background: white !important; }
+            .shadow { box-shadow: none !important; border: 1px solid #ddd !important; }
+            table { font-size: 11px !important; }
+            th { background: #f9fafb !important; -webkit-print-color-adjust: exact; }
+        }
+        .spinner {
+            border: 2px solid #e5e7eb;
+            border-top: 2px solid #3b82f6;
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 0.6s linear infinite;
+            display: inline-block;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .btn-loading { pointer-events: none; opacity: 0.7; }
+        .btn-loading .btn-text { display: none; }
+        .btn-loading .btn-spinner { display: inline-block !important; }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
     {% if current_user.is_authenticated %}
-    <nav class="bg-blue-700 text-white p-4">
+    <nav class="bg-blue-700 text-white p-4 no-print">
         <div class="max-w-6xl mx-auto flex justify-between items-center">
-            <span class="font-bold text-xl">🧪 Formulation Manager</span>
             <div class="flex items-center gap-4">
-                <span>{{ current_user.display_name }} ({{ current_user.role.upper() }})</span>
-                <a href="{{ url_for('logout') }}" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600">Logout</a>
+                <span class="font-bold text-xl">🧪 Formulation Manager</span>
+                <a href="{{ url_for('dashboard') }}" class="text-blue-200 hover:text-white text-sm">Dashboard</a>
+            </div>
+            <div class="flex items-center gap-4">
+                <span class="text-sm text-blue-200">{{ current_user.display_name }} ({{ current_user.role.upper() }})</span>
+                <a href="{{ url_for('logout') }}" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600 text-sm no-print">Logout</a>
             </div>
         </div>
     </nav>
+    
+    <!-- Breadcrumb -->
+    <div class="max-w-6xl mx-auto px-6 pt-3 breadcrumb">
+        <nav class="flex text-xs text-gray-500 gap-1">
+            <a href="{{ url_for('dashboard') }}" class="hover:text-blue-600">🏠 Dashboard</a>
+            {% block breadcrumb %}{% endblock %}
+        </nav>
+    </div>
     {% endif %}
     
     <main class="max-w-6xl mx-auto p-6">
         {% block content %}{% endblock %}
     </main>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function(e) {
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn && !btn.classList.contains('btn-loading')) {
+                    var originalHTML = btn.innerHTML;
+                    btn.classList.add('btn-loading');
+                    btn.setAttribute('data-original', originalHTML);
+                    btn.innerHTML = '<span class="spinner btn-spinner" style="display:none"></span> <span class="btn-text">Saving...</span>';
+                    btn.querySelector('.btn-spinner').style.display = 'inline-block';
+                    btn.querySelector('.btn-text').style.display = 'inline';
+                }
+            });
+        });
+    });
+    </script>
 </body>
 </html>

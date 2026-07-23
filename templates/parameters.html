@@ -1,5 +1,9 @@
 {% extends "base.html" %}
 {% block content %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <a href="{{ url_for('dashboard') }}" class="hover:text-blue-600">R&D Lab</a>
+<span class="text-gray-300">›</span> <span class="text-gray-600">QC Parameters</span>
+{% endblock %}
 
 {% with messages = get_flashed_messages() %}
     {% if messages %}

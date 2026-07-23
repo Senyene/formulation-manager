@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <span class="text-gray-600">Executive Dashboard</span>
+{% endblock %}
 
 <!-- Page Header -->
 <div class="flex justify-between items-center mb-6">
@@ -94,15 +97,11 @@
             
             <!-- Approve / Reject Buttons -->
             <div class="flex gap-2 pt-2 border-t border-yellow-200">
-                <form method="POST" action="{{ url_for('approve_formula', formula_id=formula.id) }}" class="flex-1">
-                    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-semibold text-sm">
-                        ✅ APPROVE
-                    </button>
+                <form method="POST" action="{{ url_for('approve_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Approve this formula? This will make it active for production.')">
+                    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-semibold text-sm">✅ APPROVE</button>
                 </form>
-                <form method="POST" action="{{ url_for('reject_formula', formula_id=formula.id) }}" class="flex-1">
-                    <button type="submit" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 font-semibold text-sm">
-                        ❌ REJECT
-                    </button>
+                <form method="POST" action="{{ url_for('reject_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Reject this formula? It will be returned to draft.')">
+                     <button type="submit" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 font-semibold text-sm">❌ REJECT</button>
                 </form>
             </div>
         </div>
