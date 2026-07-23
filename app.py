@@ -1,23 +1,28 @@
-from flask import Flask, render_template, redirect, url_for, request, flash, Response
+from flask import Flask, render_template, redirect, url_for, request, flash, session, get_flashed_messages, Response
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
+from functools import wraps
 import json
 import csv
 import io
 import os
+import secrets
 
 # Initialize the app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'dev-secret-key-change-later'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///formulation.db'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=30)
 db = SQLAlchemy(app)
 
 # Login manager setup
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
+login_manager.login_message = 'Please log in to access this page.'
+login_manager.login_message_category = 'warning'
 
 # ============================================
 # DATABASE MODELS
@@ -29,6 +34,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), nullable=False)
     display_name = db.Column(db.String(100), nullable=False)
+    last_active = db.Column(db.DateTime, default=datetime.utcnow)
+    is_active = db.Column(db.Boolean, default=True)
 
 class RawMaterial(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -96,15 +103,81 @@ class QCParameter(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class AuditLog(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user = db.Column(db.String(80))
+    role = db.Column(db.String(20))
+    action = db.Column(db.String(200))
+    details = db.Column(db.Text)
+    ip_address = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ============================================
-# HELPER: Check if user can see formula details
+# HELPER: Audit logging
+# ============================================
+def log_action(action, details=''):
+    if current_user.is_authenticated:
+        log = AuditLog(
+            user=current_user.display_name,
+            role=current_user.role,
+            action=action,
+            details=str(details)[:500],
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+
+# ============================================
+# HELPER: Session timeout check
+# ============================================
+@app.before_request
+def check_session_timeout():
+    if current_user.is_authenticated:
+        if current_user.last_active:
+            idle_time = datetime.utcnow() - current_user.last_active
+            if idle_time > app.config['PERMANENT_SESSION_LIFETIME']:
+                logout_user()
+                flash('Session expired due to inactivity. Please log in again.', 'warning')
+                return redirect(url_for('login'))
+        current_user.last_active = datetime.utcnow()
+        db.session.commit()
+
+# ============================================
+# HELPER: Input validation
+# ============================================
+def safe_float(value, default=0.0):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+def safe_int(value, default=0):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+# ============================================
+# HELPER: Formula details access
 # ============================================
 def can_view_formula_details():
     return current_user.role in ['rd', 'md']
+
+# ============================================
+# ERROR HANDLERS
+# ============================================
+@app.errorhandler(404)
+def not_found(e):
+    return render_template('error.html', code=404, message='Page not found'), 404
+
+@app.errorhandler(500)
+def server_error(e):
+    db.session.rollback()
+    return render_template('error.html', code=500, message='Internal server error'), 500
 
 # ============================================
 # ROUTES
@@ -119,14 +192,26 @@ def index():
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username')
-        password = request.form.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        
+        if not username or not password:
+            flash('Please enter both username and password.', 'error')
+            return render_template('login.html')
+        
         user = User.query.filter_by(username=username).first()
         if user and check_password_hash(user.password_hash, password):
+            if not user.is_active:
+                flash('This account has been deactivated.', 'error')
+                return render_template('login.html')
             login_user(user)
+            user.last_active = datetime.utcnow()
+            db.session.commit()
+            log_action('LOGIN')
+            flash(f'Welcome back, {user.display_name}!', 'success')
             return redirect(url_for('dashboard'))
         else:
-            flash('Invalid username or password')
+            flash('Invalid username or password.', 'error')
     return render_template('login.html')
 
 @app.route('/dashboard')
@@ -148,17 +233,7 @@ def dashboard():
         formulas = Formula.query.filter_by(status='approved').all()
         recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
-        tests_json = []
-        for t in recent_tests:
-            tests_json.append({
-                'id': t.id,
-                'batch': t.batch_number,
-                'formula_id': t.formula_id,
-                'formula_code': t.formula.code if t.formula else 'N/A',
-                'date': t.test_date.strftime('%Y-%m-%d') if t.test_date else '',
-                'status': t.status,
-                'parameters': json.loads(t.parameters) if t.parameters else []
-            })
+        tests_json = [{'id': t.id, 'batch': t.batch_number, 'formula_id': t.formula_id, 'formula_code': t.formula.code if t.formula else 'N/A', 'date': t.test_date.strftime('%Y-%m-%d') if t.test_date else '', 'status': t.status, 'parameters': json.loads(t.parameters) if t.parameters else []} for t in recent_tests]
         return render_template(template, formulas=formulas, recent_tests=recent_tests, qc_parameters=qc_parameters, recent_tests_json=json.dumps(tests_json), show_formula_details=False)
     
     elif current_user.role == 'rd':
@@ -260,12 +335,16 @@ def dashboard():
 @login_required
 def submit_qc_result():
     if current_user.role != 'qc':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     
-    formula_id = request.form.get('formula_id')
+    formula_id = safe_int(request.form.get('formula_id'))
     test_date = request.form.get('test_date')
-    notes = request.form.get('notes')
+    notes = request.form.get('notes', '').strip()[:500]
+    
+    if not formula_id:
+        flash('Please select a formula.', 'error')
+        return redirect(url_for('dashboard'))
     
     param_names = request.form.getlist('param_name[]')
     param_results = request.form.getlist('param_result[]')
@@ -275,28 +354,46 @@ def submit_qc_result():
     parameters = []
     all_pass = True
     for i in range(len(param_names)):
-        if param_names[i]:
+        if param_names[i] and param_names[i].strip():
             spec_range = param_specs[i] if i < len(param_specs) else ''
             result_val = param_results[i] if i < len(param_results) else ''
             param_pass = True
             if spec_range and result_val:
                 try:
-                    low, high = spec_range.split('-')
-                    result_float = float(result_val)
-                    param_pass = float(low) <= result_float <= float(high)
+                    parts = spec_range.replace('≥', '').replace('≤', '').strip().split('-')
+                    if len(parts) == 2:
+                        result_float = float(result_val)
+                        param_pass = float(parts[0].strip()) <= result_float <= float(parts[1].strip())
+                    elif '≥' in spec_range:
+                        result_float = float(result_val)
+                        param_pass = result_float >= float(parts[0].strip())
+                    elif '≤' in spec_range:
+                        result_float = float(result_val)
+                        param_pass = result_float <= float(parts[0].strip())
                 except:
                     param_pass = True
             if not param_pass:
                 all_pass = False
-            parameters.append({'name': param_names[i], 'result': param_results[i] if i < len(param_results) else '', 'unit': param_units[i] if i < len(param_units) else '', 'spec': spec_range, 'pass': param_pass})
+            parameters.append({'name': param_names[i].strip(), 'result': result_val, 'unit': param_units[i] if i < len(param_units) else '', 'spec': spec_range, 'pass': param_pass})
     
-    formula = Formula.query.get(int(formula_id)) if formula_id else None
+    if not parameters:
+        flash('Please add at least one test parameter.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    formula = Formula.query.get(formula_id) if formula_id else None
     batch_number = _generate_batch_number(formula)
+    
+    parsed_date = datetime.utcnow()
+    if test_date:
+        try:
+            parsed_date = datetime.strptime(test_date, '%Y-%m-%dT%H:%M')
+        except ValueError:
+            pass
     
     test_result = QCTestResult(
         formula_id=formula_id,
         batch_number=batch_number,
-        test_date=datetime.strptime(test_date, '%Y-%m-%dT%H:%M') if test_date else datetime.utcnow(),
+        test_date=parsed_date,
         tested_by=current_user.display_name,
         parameters=json.dumps(parameters),
         status='pass' if all_pass else 'fail',
@@ -306,7 +403,8 @@ def submit_qc_result():
     db.session.add(test_result)
     db.session.commit()
     
-    flash('Test result submitted successfully!')
+    log_action('QC_SUBMIT', f'Batch: {batch_number}, Formula: {formula.code if formula else "N/A"}, Status: {test_result.status}')
+    flash(f'Test result submitted! Batch: {batch_number}', 'success')
     return redirect(url_for('dashboard'))
 
 # ============================================
@@ -317,127 +415,159 @@ def submit_qc_result():
 @login_required
 def create_formula():
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    code = request.form.get('code')
-    name = request.form.get('name')
-    version = request.form.get('version', '1.0')
+    code = request.form.get('code', '').strip()
+    name = request.form.get('name', '').strip()
+    version = request.form.get('version', '1.0').strip()
+    
+    if not code or not name:
+        flash('Formula code and name are required.', 'error')
+        return redirect(url_for('dashboard'))
+    if len(code) > 20 or len(name) > 200:
+        flash('Formula code or name is too long.', 'error')
+        return redirect(url_for('dashboard'))
     if Formula.query.filter_by(code=code).first():
-        flash('Formula code already exists!')
+        flash('Formula code already exists!', 'error')
         return redirect(url_for('dashboard'))
+    
     formula = Formula(code=code, name=name, version=version, status='draft', created_by=current_user.display_name)
     db.session.add(formula)
     db.session.commit()
-    flash(f'Formula {code} created successfully!')
+    log_action('FORMULA_CREATE', f'Code: {code}, Name: {name}')
+    flash(f'Formula {code} created successfully!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/add-ingredient', methods=['POST'])
 @login_required
 def add_ingredient():
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    formula_id = request.form.get('formula_id')
-    material_id = request.form.get('material_id')
-    quantity = request.form.get('quantity')
-    unit = request.form.get('unit', 'kg')
+    formula_id = safe_int(request.form.get('formula_id'))
+    material_id = safe_int(request.form.get('material_id'))
+    quantity = safe_float(request.form.get('quantity'))
+    unit = request.form.get('unit', 'kg').strip()[:20]
+    
+    if not formula_id or not material_id or quantity <= 0:
+        flash('Please fill all ingredient fields correctly.', 'error')
+        return redirect(url_for('dashboard'))
     if FormulaIngredient.query.filter_by(formula_id=formula_id, raw_material_id=material_id).first():
-        flash('This material is already in the formula. Edit it instead.')
+        flash('This material is already in the formula.', 'error')
         return redirect(url_for('dashboard'))
-    ingredient = FormulaIngredient(formula_id=formula_id, raw_material_id=material_id, quantity=float(quantity), unit=unit)
+    
+    ingredient = FormulaIngredient(formula_id=formula_id, raw_material_id=material_id, quantity=quantity, unit=unit)
     db.session.add(ingredient)
     db.session.commit()
     _update_batch_size(formula_id)
-    flash('Ingredient added to formula!')
+    flash('Ingredient added!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-ingredient/<int:ingredient_id>', methods=['POST'])
 @login_required
 def update_ingredient(ingredient_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     ingredient = FormulaIngredient.query.get_or_404(ingredient_id)
-    ingredient.quantity = float(request.form.get('quantity'))
-    ingredient.unit = request.form.get('unit', 'kg')
+    quantity = safe_float(request.form.get('quantity'))
+    unit = request.form.get('unit', 'kg').strip()[:20]
+    if quantity <= 0:
+        flash('Quantity must be greater than zero.', 'error')
+        return redirect(url_for('dashboard'))
+    ingredient.quantity = quantity
+    ingredient.unit = unit
     db.session.commit()
     _update_batch_size(ingredient.formula_id)
-    flash('Ingredient updated!')
+    flash('Ingredient updated!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/remove-ingredient/<int:ingredient_id>', methods=['POST'])
 @login_required
 def remove_ingredient(ingredient_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     ingredient = FormulaIngredient.query.get_or_404(ingredient_id)
     fid = ingredient.formula_id
     db.session.delete(ingredient)
     db.session.commit()
     _update_batch_size(fid)
-    flash('Ingredient removed from formula.')
+    flash('Ingredient removed.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/submit-for-approval/<int:formula_id>', methods=['POST'])
 @login_required
 def submit_for_approval(formula_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     formula = Formula.query.get_or_404(formula_id)
     if formula.status == 'draft' and formula.ingredients:
         formula.status = 'pending_approval'
         db.session.commit()
-        flash(f'Formula {formula.code} submitted for MD approval!')
+        log_action('FORMULA_SUBMIT', f'Code: {formula.code}')
+        flash(f'Formula {formula.code} submitted for MD approval!', 'success')
     else:
-        flash('Formula must be in draft status and have ingredients.')
+        flash('Formula must be in draft status and have ingredients.', 'error')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-formula-status/<int:formula_id>', methods=['POST'])
 @login_required
 def update_formula_status(formula_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     formula = Formula.query.get_or_404(formula_id)
     new_status = request.form.get('status')
     if new_status in ['draft', 'archived']:
         formula.status = new_status
         db.session.commit()
-        flash(f'Formula {formula.code} is now {new_status.upper()}')
+        log_action('FORMULA_STATUS', f'Code: {formula.code}, Status: {new_status}')
+        flash(f'Formula {formula.code} is now {new_status.upper()}.', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/create-material', methods=['POST'])
 @login_required
 def create_material():
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    code = request.form.get('code')
+    code = request.form.get('code', '').strip()
+    if not code:
+        flash('Material code is required.', 'error')
+        return redirect(url_for('dashboard'))
     if RawMaterial.query.filter_by(code=code).first():
-        flash('Material code already exists!')
+        flash('Material code already exists!', 'error')
         return redirect(url_for('dashboard'))
-    material = RawMaterial(code=code, name=request.form.get('name'), supplier=request.form.get('supplier'), unit=request.form.get('unit', 'kg'), cost_per_unit=float(request.form.get('cost_per_unit', 0)), stock_level=float(request.form.get('stock_level', 0)), created_by=current_user.display_name)
+    material = RawMaterial(
+        code=code,
+        name=request.form.get('name', '').strip(),
+        supplier=request.form.get('supplier', '').strip()[:100],
+        unit=request.form.get('unit', 'kg').strip()[:20],
+        cost_per_unit=safe_float(request.form.get('cost_per_unit', 0)),
+        stock_level=safe_float(request.form.get('stock_level', 0)),
+        created_by=current_user.display_name
+    )
     db.session.add(material)
     db.session.commit()
-    flash(f'Material {code} created!')
+    flash(f'Material {code} created!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/rd/update-material/<int:material_id>', methods=['POST'])
 @login_required
 def update_material(material_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     material = RawMaterial.query.get_or_404(material_id)
-    material.name = request.form.get('name')
-    material.supplier = request.form.get('supplier')
-    material.unit = request.form.get('unit', 'kg')
-    material.cost_per_unit = float(request.form.get('cost_per_unit', 0))
-    material.stock_level = float(request.form.get('stock_level', 0))
+    material.name = request.form.get('name', material.name).strip()
+    material.supplier = request.form.get('supplier', material.supplier).strip()[:100]
+    material.unit = request.form.get('unit', material.unit).strip()[:20]
+    material.cost_per_unit = safe_float(request.form.get('cost_per_unit', material.cost_per_unit))
+    material.stock_level = safe_float(request.form.get('stock_level', material.stock_level))
     db.session.commit()
-    flash(f'Material {material.code} updated!')
+    flash(f'Material {material.code} updated!', 'success')
     return redirect(url_for('dashboard'))
 
 # ============================================
@@ -448,7 +578,7 @@ def update_material(material_id):
 @login_required
 def approve_formula(formula_id):
     if current_user.role != 'md':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     formula = Formula.query.get_or_404(formula_id)
     if formula.status == 'pending_approval':
@@ -456,20 +586,22 @@ def approve_formula(formula_id):
         formula.approved_by = current_user.display_name
         formula.approved_at = datetime.utcnow()
         db.session.commit()
-        flash(f'Formula {formula.code} has been APPROVED!')
+        log_action('FORMULA_APPROVE', f'Code: {formula.code}')
+        flash(f'Formula {formula.code} has been APPROVED!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/md/reject/<int:formula_id>', methods=['POST'])
 @login_required
 def reject_formula(formula_id):
     if current_user.role != 'md':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     formula = Formula.query.get_or_404(formula_id)
     if formula.status == 'pending_approval':
         formula.status = 'draft'
         db.session.commit()
-        flash(f'Formula {formula.code} has been REJECTED and returned to draft.')
+        log_action('FORMULA_REJECT', f'Code: {formula.code}')
+        flash(f'Formula {formula.code} has been REJECTED.', 'error')
     return redirect(url_for('dashboard'))
 
 # ============================================
@@ -480,7 +612,7 @@ def reject_formula(formula_id):
 @login_required
 def manage_parameters():
     if current_user.role not in ['rd', 'qc']:
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     parameters = QCParameter.query.order_by(QCParameter.name).all()
     return render_template('parameters.html', parameters=parameters)
@@ -489,32 +621,31 @@ def manage_parameters():
 @login_required
 def add_parameter():
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    name = request.form.get('name')
-    unit = request.form.get('unit', '')
-    spec_min = request.form.get('spec_min')
-    spec_max = request.form.get('spec_max')
-    if QCParameter.query.filter_by(name=name).first():
-        flash(f'Parameter "{name}" already exists!')
+    name = request.form.get('name', '').strip()
+    if not name:
+        flash('Parameter name is required.', 'error')
         return redirect(url_for('manage_parameters'))
-    param = QCParameter(name=name, unit=unit, spec_min=float(spec_min) if spec_min else None, spec_max=float(spec_max) if spec_max else None, is_active=True)
+    if QCParameter.query.filter_by(name=name).first():
+        flash(f'Parameter "{name}" already exists!', 'error')
+        return redirect(url_for('manage_parameters'))
+    param = QCParameter(name=name, unit=request.form.get('unit', '').strip(), spec_min=safe_float(request.form.get('spec_min')) if request.form.get('spec_min') else None, spec_max=safe_float(request.form.get('spec_max')) if request.form.get('spec_max') else None, is_active=True)
     db.session.add(param)
     db.session.commit()
-    flash(f'Parameter "{name}" added!')
+    flash(f'Parameter "{name}" added!', 'success')
     return redirect(url_for('manage_parameters'))
 
 @app.route('/rd/parameters/toggle/<int:param_id>', methods=['POST'])
 @login_required
 def toggle_parameter(param_id):
     if current_user.role != 'rd':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     param = QCParameter.query.get_or_404(param_id)
     param.is_active = not param.is_active
     db.session.commit()
-    status = 'activated' if param.is_active else 'deactivated'
-    flash(f'Parameter "{param.name}" {status}!')
+    flash(f'Parameter "{param.name}" {"activated" if param.is_active else "deactivated"}!', 'success')
     return redirect(url_for('manage_parameters'))
 
 # ============================================
@@ -525,44 +656,50 @@ def toggle_parameter(param_id):
 @login_required
 def create_production_batch():
     if current_user.role != 'planner':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    formula_id = request.form.get('formula_id')
-    batch_number = request.form.get('batch_number')
+    formula_id = safe_int(request.form.get('formula_id'))
+    batch_number = request.form.get('batch_number', '').strip()
     planned_date = request.form.get('planned_date')
-    quantity_planned = request.form.get('quantity_planned')
-    notes = request.form.get('notes')
-    if ProductionBatch.query.filter_by(batch_number=batch_number).first():
-        flash('Batch number already exists!')
+    quantity_planned = safe_float(request.form.get('quantity_planned'))
+    notes = request.form.get('notes', '').strip()[:500]
+    
+    if not formula_id or not batch_number:
+        flash('Formula and batch number are required.', 'error')
         return redirect(url_for('dashboard'))
-    batch = ProductionBatch(formula_id=formula_id, batch_number=batch_number, planned_date=datetime.strptime(planned_date, '%Y-%m-%d') if planned_date else datetime.utcnow(), quantity_planned=float(quantity_planned) if quantity_planned else 0, status='planned', notes=notes, created_by=current_user.display_name)
+    if ProductionBatch.query.filter_by(batch_number=batch_number).first():
+        flash('Batch number already exists!', 'error')
+        return redirect(url_for('dashboard'))
+    
+    batch = ProductionBatch(formula_id=formula_id, batch_number=batch_number, planned_date=datetime.strptime(planned_date, '%Y-%m-%d') if planned_date else datetime.utcnow(), quantity_planned=quantity_planned, status='planned', notes=notes, created_by=current_user.display_name)
     db.session.add(batch)
     db.session.commit()
-    flash(f'Production batch {batch_number} planned!')
+    log_action('BATCH_CREATE', f'Batch: {batch_number}')
+    flash(f'Production batch {batch_number} planned!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/planner/update-batch/<int:batch_id>', methods=['POST'])
 @login_required
 def update_production_batch(batch_id):
     if current_user.role != 'planner':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     batch = ProductionBatch.query.get_or_404(batch_id)
-    batch.quantity_produced = float(request.form.get('quantity_produced', 0))
+    batch.quantity_produced = safe_float(request.form.get('quantity_produced', 0))
     new_status = request.form.get('status')
     if new_status in ['planned', 'in_progress', 'completed', 'cancelled']:
         batch.status = new_status
         if new_status == 'completed':
             batch.actual_date = datetime.utcnow()
     db.session.commit()
-    flash(f'Batch {batch.batch_number} updated!')
+    flash(f'Batch {batch.batch_number} updated!', 'success')
     return redirect(url_for('dashboard'))
 
 @app.route('/planner/export-consumption')
 @login_required
 def export_consumption():
     if current_user.role != 'planner':
-        flash('Access denied')
+        flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     output = io.StringIO()
     writer = csv.writer(output)
@@ -590,7 +727,9 @@ def export_consumption():
 @app.route('/logout')
 @login_required
 def logout():
+    log_action('LOGOUT')
     logout_user()
+    flash('You have been logged out.', 'success')
     return redirect(url_for('login'))
 
 # ============================================
@@ -606,30 +745,22 @@ def _update_batch_size(formula_id):
         db.session.commit()
 
 def _generate_batch_number(formula):
-    """Generate sequential batch number: DDMM-SHIFT-SEQ for tomato, MMYY-SHIFT-SEQ for others."""
     now = datetime.utcnow()
     hours = now.hour
     shift = 'A' if 7 <= hours < 19 else 'B'
     is_tomato = formula and formula.code in ['F-021A', 'F-021B', 'F-021C', 'F-022', 'F-023', 'F-024', 'F-025']
-    
     if is_tomato:
         prefix = now.strftime('%d%m') + '-' + shift + '-'
     else:
         prefix = now.strftime('%m%y') + '-' + shift + '-'
-    
-    last_batch = QCTestResult.query.filter(
-        QCTestResult.batch_number.like(prefix + '%')
-    ).order_by(QCTestResult.batch_number.desc()).first()
-    
+    last_batch = QCTestResult.query.filter(QCTestResult.batch_number.like(prefix + '%')).order_by(QCTestResult.batch_number.desc()).first()
     if last_batch:
         try:
-            last_seq = int(last_batch.batch_number.split('-')[-1])
-            seq = last_seq + 1
+            seq = int(last_batch.batch_number.split('-')[-1]) + 1
         except:
             seq = 1
     else:
         seq = 1
-    
     return prefix + str(seq).zfill(3)
 
 # ============================================
@@ -886,28 +1017,25 @@ def _seed_formulas():
         db.session.add(f); db.session.flush()
         add_ings(f, ings)
     
-       # TOMATO PASTES
-    # F-021 split into 3 individual formulas (same formulation)
+    # TOMATO PASTES
     tomato_021_ings = [('Concentrate', 480), ('Water', 1960), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium ascorbate', 0.2)]
     
     f = Formula(code='F-021A', name='Ric-giko Tomato Paste', version='1.0', status='approved', created_by='system')
-    db.session.add(f); db.session.flush()
-    add_ings(f, tomato_021_ings)
-    
+    db.session.add(f); db.session.flush(); add_ings(f, tomato_021_ings)
     f = Formula(code='F-021B', name='Tomagood Tomato Mix', version='1.0', status='approved', created_by='system')
-    db.session.add(f); db.session.flush()
-    add_ings(f, tomato_021_ings)
-    
+    db.session.add(f); db.session.flush(); add_ings(f, tomato_021_ings)
     f = Formula(code='F-021C', name='Erisco (Normal) Tomato Paste', version='1.0', status='approved', created_by='system')
-    db.session.add(f); db.session.flush()
-    add_ings(f, tomato_021_ings)
-
+    db.session.add(f); db.session.flush(); add_ings(f, tomato_021_ings)
+    
     f = Formula(code='F-022', name='Erisco Tomato Paste', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Concentrate', 720), ('Water', 1960), ('Fibre', 180), ('Sugar', 150), ('Salt', 60), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 6), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.075), ('Colour (Sunset Yellow)', 0.061), ('Colour (Allura Red)', 0.009), ('Stabilizer (CMC)', 0.067), ('Maltdextrin', 6), ('Sodium ascorbate', 2)])
     f = Formula(code='F-023', name='Nagiko Tomato Mix', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Tomato concentrate', 330), ('Water', 2110), ('Fibre', 200), ('Sugar', 75), ('Salt', 40), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 3), ('Msg', 1), ('Colour (Erythrosine)', 0.06), ('Colour (Ponceau 4R)', 0.074), ('Colour (Sunset Yellow)', 0.06), ('Colour (Allura Red)', 0.008), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6)])
+    f = Formula(code='F-024', name='Erisco Party Jollof Tomato Paste', version='1.0', status='approved', created_by='system')
+    db.session.add(f); db.session.flush()
+    add_ings(f, [('Concentrate', 480), ('Water', 1960), ('Chicken powder', 8), ('Chicken oil', 0.5), ('Garlic', 6), ('Ginger', 5), ('Tumeric', 5), ('Onion powder', 40), ('Fibre', 180), ('Sugar', 140), ('Salt', 50), ('Citric acid', 14.3), ('Potassium sorbate', 8.7), ('Caramel', 1), ('Msg', 25), ('Colour (Sunset Yellow)', 0.157), ('Colour (Allura Red)', 0.208), ('Stabilizer (CMC)', 0.067), ('Starch', 5), ('Maltdextrin', 6), ('Sodium erythrobate', 0.2), ('Pepper', 8), ('Palm oil', 3)])
     f = Formula(code='F-025', name='Erisco So Red Ketchup', version='1.0', status='approved', created_by='system')
     db.session.add(f); db.session.flush()
     add_ings(f, [('Tomato concentrate', 233), ('Fibre', 30), ('Sugar', 253), ('Salt', 30), ('Citric acid', 10), ('Potassium sorbate', 4.5), ('Onion powder', 3), ('Colour (Erythrosine)', 0.035), ('Colour (Ponceau 4R)', 0.015), ('Acetic acid', 5), ('Corn starch', 20), ('Water', 940)])
