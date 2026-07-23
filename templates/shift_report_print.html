@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shift Report - {{ date.strftime('%d-%b-%Y') }} Shift {{ shift }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>@media print{body{background:white!important}.no-print{display:none!important}}</style>
+</head>
+<body class="bg-white p-8">
+    <div class="max-w-4xl mx-auto">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold">End of Shift Report</h1>
+            <p class="text-gray-600">Shift {{ shift }} | {{ date.strftime('%d-%b-%Y') }}</p>
+        </div>
+        
+        {% if reports %}
+        {% set sections = {'Tin': [], 'Sachet_Pouch': [], 'Cube': [], 'Dry': []} %}
+        {% for r in reports %}
+            {% if r.section in sections %}
+                {% set _ = sections[r.section].append(r) %}
+            {% endif %}
+        {% endfor %}
+        
+        {% for section_name, section_reports in sections.items() %}
+        {% if section_reports %}
+        <div class="mb-6 border rounded-lg overflow-hidden">
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">
+                {% if section_name == 'Tin' %}🔧 Tin Section
+                {% elif section_name == 'Sachet_Pouch' %}📦 Sachet & Pouch Section
+                {% elif section_name == 'Cube' %}🧊 Cube Section
+                {% else %}🏭 Dry Section{% endif %}
+            </h2>
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Mixing Plant</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-left">Filling SKU</th><th class="px-3 py-2 text-left">Packaging SKU</th><th class="px-3 py-2 text-right">Pallets</th><th class="px-3 py-2 text-right">Cartons</th></tr></thead>
+                <tbody>
+                    {% for r in section_reports %}
+                    <tr class="border-t"><td class="px-3 py-2">{{ r.mixing_plant or '-' }}</td><td class="px-3 py-2">{{ r.product or '-' }}</td><td class="px-3 py-2">{{ r.filling_sku or '-' }}</td><td class="px-3 py-2">{{ r.packaging_sku or '-' }}</td><td class="px-3 py-2 text-right">{{ r.total_pallets }}</td><td class="px-3 py-2 text-right">{{ r.total_cartons }}</td></tr>
+                    {% endfor %}
+                    <tr class="border-t font-bold bg-gray-50"><td colspan="4" class="px-3 py-2">Section Total</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_pallets') }}</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_cartons') }}</td></tr>
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+        {% endfor %}
+        
+        <!-- Grand Total -->
+        <div class="border rounded-lg overflow-hidden mb-4">
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">📊 Grand Total</h2>
+            <table class="w-full text-sm">
+                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Pallets</td><td class="px-4 py-3 text-right">{{ reports|sum(attribute='total_pallets') }}</td></tr>
+                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Cartons</td><td class="px-4 py-3 text-right">{{ reports|sum(attribute='total_cartons') }}</td></tr>
+            </table>
+        </div>
+        
+        {% if reports[0].notes %}
+        <div class="mb-4"><h3 class="font-bold text-sm mb-1">Notes:</h3><p class="text-gray-700">{{ reports[0].notes }}</p></div>
+        {% endif %}
+        
+        <div class="text-sm text-gray-500 mt-4">Submitted by: {{ reports[0].submitted_by }} | {{ reports[0].created_at.strftime('%d-%b-%Y %H:%M') }}</div>
+        {% else %}
+        <p class="text-center text-gray-500 py-8">No report data found.</p>
+        {% endif %}
+        
+        <div class="text-center mt-8 no-print">
+            <button onclick="window.print()" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">🖨️ Print Report</button>
+            <a href="{{ url_for('dashboard') }}" class="ml-2 text-blue-600 hover:underline">Back to Dashboard</a>
+        </div>
+    </div>
+</body>
+</html>

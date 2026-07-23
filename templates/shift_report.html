@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <span class="text-gray-600">QC Lab</span>
+<span class="text-gray-300">›</span> <span class="text-gray-600">End of Shift Report</span>
+{% endblock %}
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="{% if category == 'error' %}bg-red-100 border-red-400 text-red-700{% elif category == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700{% else %}bg-green-100 border-green-400 text-green-700{% endif %} border px-4 py-3 rounded mb-4">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="flex justify-between items-center mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-gray-800">📋 End of Shift Report</h1>
+        <p class="text-sm text-gray-500">Shift {{ shift }} | {{ today.strftime('%d-%b-%Y') }}</p>
+    </div>
+    <span id="currentShift" class="text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800">SHIFT {{ shift }}</span>
+</div>
+
+{% if already_submitted %}
+<div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center mb-6">
+    <p class="text-green-800 font-semibold text-lg mb-2">✅ Shift Report Already Submitted</p>
+    <p class="text-green-600">The end of shift report for Shift {{ shift }} on {{ today.strftime('%d-%b-%Y') }} has been submitted.</p>
+    <a href="{{ url_for('print_shift_report', shift=shift, date=today.isoformat()) }}" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm">🖨️ Print Report</a>
+</div>
+{% else %}
+<form method="POST" id="shiftReportForm">
+    <div id="sectionsContainer">
+        <!-- Tin Section -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🔧 Tin Section</h2>
+            <input type="hidden" name="section[]" value="Tin">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" placeholder="e.g., 400g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+        </div>
+        
+        <!-- Sachet & Pouch Section -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">📦 Sachet & Pouch Section</h2>
+            <input type="hidden" name="section[]" value="Sachet_Pouch">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" placeholder="e.g., 70g, 1100g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+        </div>
+        
+        <!-- Cube Section -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🧊 Cube Section</h2>
+            <input type="hidden" name="section[]" value="Cube">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+        </div>
+        
+        <!-- Dry Section -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🏭 Dry Section</h2>
+            <input type="hidden" name="section[]" value="Dry">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-gray-700 mb-1">General Notes</label>
+        <textarea name="notes" rows="3" placeholder="Any shift notes, incidents, or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
+    </div>
+    
+    <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg" onclick="return confirm('Submit end of shift report? This cannot be edited after submission.')"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">📋 Submit End of Shift Report</span></button>
+</form>
+{% endif %}
+{% endblock %}

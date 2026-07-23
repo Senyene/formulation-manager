@@ -112,6 +112,48 @@ class AuditLog(db.Model):
     ip_address = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+class HourlyWeightCheck(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    check_time = db.Column(db.DateTime, default=datetime.utcnow)
+    product = db.Column(db.String(100), nullable=False)
+    weight = db.Column(db.Float, nullable=False)
+    unit = db.Column(db.String(10), default='g')
+    spec_min = db.Column(db.Float, nullable=True)
+    spec_max = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(20), default='pass')
+    recorded_by = db.Column(db.String(80))
+    shift = db.Column(db.String(1))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class FinishedGoodsTest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    formula_id = db.Column(db.Integer, db.ForeignKey('formula.id'), nullable=False)
+    batch_number = db.Column(db.String(50), nullable=False)
+    sku = db.Column(db.String(20), nullable=False)  # Tin: 2200g, 800g, etc; Pouch: 1100g, etc; Sachet: 70g
+    package_type = db.Column(db.String(20), nullable=False)  # Tin, Pouch, Sachet
+    test_date = db.Column(db.DateTime, default=datetime.utcnow)
+    tested_by = db.Column(db.String(80))
+    parameters = db.Column(db.Text)  # JSON same as in-process
+    pasteurizer_temp = db.Column(db.Float, nullable=True)
+    status = db.Column(db.String(20), default='pending')
+    notes = db.Column(db.Text)
+    formula = db.relationship('Formula')
+
+class EndOfShiftReport(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    shift = db.Column(db.String(1), nullable=False)
+    report_date = db.Column(db.Date, nullable=False)
+    section = db.Column(db.String(30), nullable=False)  # Tin, Sachet_Pouch, Cube, Dry
+    mixing_plant = db.Column(db.String(100))
+    product = db.Column(db.String(200))
+    filling_sku = db.Column(db.String(50))
+    packaging_sku = db.Column(db.String(50))
+    total_pallets = db.Column(db.Integer, default=0)
+    total_cartons = db.Column(db.Integer, default=0)
+    notes = db.Column(db.Text)
+    submitted_by = db.Column(db.String(80))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
@@ -230,6 +272,15 @@ def dashboard():
     show_formula_details = can_view_formula_details()
     
     if current_user.role == 'qc':
+        # Check if shift report submitted
+        now = datetime.utcnow()
+        shift = 'A' if 7 <= now.hour < 19 else 'B'
+        today = now.date()
+        report_exists = EndOfShiftReport.query.filter_by(shift=shift, report_date=today).first()
+        
+        # Pass shift report status
+        shift_report_done = report_exists is not None
+
         formulas = Formula.query.filter_by(status='approved').all()
         recent_tests = QCTestResult.query.order_by(QCTestResult.test_date.desc()).limit(20).all()
         qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
@@ -325,7 +376,7 @@ def dashboard():
         dept_activity = {'R&D': Formula.query.count(), 'QC': total_qc_tests, 'Planning': total_batches, 'Production': completed_batches}
         return render_template(template, total_formulas=total_formulas, approved_formulas=approved_formulas, pending_approvals=pending_approvals, total_materials=total_materials, total_qc_tests=total_qc_tests, qc_pass_rate=qc_pass_rate, monthly_qc_count=len(monthly_qc), monthly_pass=monthly_pass, monthly_fail=monthly_fail, total_batches=total_batches, completed_batches=completed_batches, total_produced=total_produced, total_planned=total_planned, production_efficiency=production_efficiency, total_inventory_value=total_inventory_value, low_stock_count=low_stock_count, recent_qc=recent_qc, recent_production=recent_production, dept_activity=dept_activity, failed_tests=len([t for t in all_qc if t.status == 'fail']), pending_formulas=pending_formulas, show_formula_details=True)
     
-    return render_template(template, show_formula_details=False)
+    return render_template(template, show_formula_details=False, shift_report_done=shift_report_done)
 
 # ============================================
 # QC ROUTE
@@ -836,6 +887,208 @@ def export_single_formula(formula_id):
         mimetype="text/csv",
         headers={"Content-disposition": f"attachment; filename={filename}"}
     )
+
+# ============================================
+# HOURLY WEIGHT CHECK ROUTES
+# ============================================
+
+@app.route('/qc/weight-check', methods=['GET', 'POST'])
+@login_required
+def weight_check():
+    if current_user.role != 'qc':
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        product = request.form.get('product', '').strip()
+        weight = safe_float(request.form.get('weight', 0))
+        unit = request.form.get('unit', 'g')
+        spec_min = safe_float(request.form.get('spec_min')) if request.form.get('spec_min') else None
+        spec_max = safe_float(request.form.get('spec_max')) if request.form.get('spec_max') else None
+        
+        if not product or weight <= 0:
+            flash('Product and weight are required.', 'error')
+            return redirect(url_for('weight_check'))
+        
+        now = datetime.utcnow()
+        shift = 'A' if 7 <= now.hour < 19 else 'B'
+        status = 'pass'
+        if spec_min and spec_max:
+            status = 'pass' if spec_min <= weight <= spec_max else 'fail'
+        elif spec_min:
+            status = 'pass' if weight >= spec_min else 'fail'
+        elif spec_max:
+            status = 'pass' if weight <= spec_max else 'fail'
+        
+        check = HourlyWeightCheck(
+            check_time=now,
+            product=product,
+            weight=weight,
+            unit=unit,
+            spec_min=spec_min,
+            spec_max=spec_max,
+            status=status,
+            recorded_by=current_user.display_name,
+            shift=shift
+        )
+        db.session.add(check)
+        db.session.commit()
+        log_action('WEIGHT_CHECK', f'Product: {product}, Weight: {weight}{unit}')
+        flash('Weight check recorded!', 'success')
+        return redirect(url_for('weight_check'))
+    
+    today = datetime.utcnow().date()
+    checks = HourlyWeightCheck.query.filter(
+        db.func.date(HourlyWeightCheck.check_time) == today
+    ).order_by(HourlyWeightCheck.check_time.desc()).all()
+    
+    return render_template('weight_check.html', checks=checks)
+
+# ============================================
+# FINISHED GOODS ANALYSIS ROUTES
+# ============================================
+
+@app.route('/qc/finished-goods', methods=['GET', 'POST'])
+@login_required
+def finished_goods():
+    if current_user.role != 'qc':
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    if request.method == 'POST':
+        formula_id = safe_int(request.form.get('formula_id'))
+        sku = request.form.get('sku', '').strip()
+        package_type = request.form.get('package_type', '').strip()
+        pasteurizer_temp = safe_float(request.form.get('pasteurizer_temp'))
+        notes = request.form.get('notes', '').strip()[:500]
+        
+        if not formula_id or not sku or not package_type:
+            flash('Formula, SKU, and package type are required.', 'error')
+            return redirect(url_for('finished_goods'))
+        
+        param_names = request.form.getlist('param_name[]')
+        param_results = request.form.getlist('param_result[]')
+        param_units = request.form.getlist('param_unit[]')
+        param_specs = request.form.getlist('param_spec[]')
+        
+        parameters = []
+        all_pass = True
+        for i in range(len(param_names)):
+            if param_names[i] and param_names[i].strip():
+                spec_range = param_specs[i] if i < len(param_specs) else ''
+                result_val = param_results[i] if i < len(param_results) else ''
+                param_pass = True
+                if spec_range and result_val:
+                    try:
+                        parts = spec_range.replace('≥','').replace('≤','').strip().split('-')
+                        if len(parts) == 2:
+                            param_pass = float(parts[0].strip()) <= float(result_val) <= float(parts[1].strip())
+                    except:
+                        param_pass = True
+                if not param_pass:
+                    all_pass = False
+                parameters.append({'name': param_names[i].strip(), 'result': result_val, 'unit': param_units[i] if i < len(param_units) else '', 'spec': spec_range, 'pass': param_pass})
+        
+        formula = Formula.query.get(formula_id)
+        batch_number = _generate_batch_number(formula)
+        
+        # Check pasteurizer temp
+        pasteurizer_pass = 87 <= pasteurizer_temp <= 97 if pasteurizer_temp else True
+        if not pasteurizer_pass:
+            all_pass = False
+        
+        test = FinishedGoodsTest(
+            formula_id=formula_id,
+            batch_number=batch_number,
+            sku=sku,
+            package_type=package_type,
+            test_date=datetime.utcnow(),
+            tested_by=current_user.display_name,
+            parameters=json.dumps(parameters),
+            pasteurizer_temp=pasteurizer_temp if pasteurizer_temp else None,
+            status='pass' if all_pass else 'fail',
+            notes=notes
+        )
+        db.session.add(test)
+        db.session.commit()
+        log_action('FINISHED_GOODS', f'Batch: {batch_number}, SKU: {sku}, Status: {test.status}')
+        flash(f'Finished goods test submitted! Batch: {batch_number}', 'success')
+        return redirect(url_for('finished_goods'))
+    
+    formulas = Formula.query.filter_by(status='approved').all()
+    qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
+    recent_tests = FinishedGoodsTest.query.order_by(FinishedGoodsTest.test_date.desc()).limit(20).all()
+    return render_template('finished_goods.html', formulas=formulas, qc_parameters=qc_parameters, recent_tests=recent_tests)
+
+# ============================================
+# END OF SHIFT REPORT ROUTES
+# ============================================
+
+@app.route('/qc/shift-report', methods=['GET', 'POST'])
+@login_required
+def shift_report():
+    if current_user.role != 'qc':
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    now = datetime.utcnow()
+    shift = 'A' if 7 <= now.hour < 19 else 'B'
+    today = now.date()
+    
+    if request.method == 'POST':
+        sections = request.form.getlist('section[]')
+        mixing_plants = request.form.getlist('mixing_plant[]')
+        products = request.form.getlist('product[]')
+        filling_skus = request.form.getlist('filling_sku[]')
+        packaging_skus = request.form.getlist('packaging_sku[]')
+        pallets = request.form.getlist('total_pallets[]')
+        cartons = request.form.getlist('total_cartons[]')
+        all_notes = request.form.get('notes', '').strip()[:1000]
+        
+        if not sections:
+            flash('Please add at least one section entry.', 'error')
+            return redirect(url_for('shift_report'))
+        
+        for i in range(len(sections)):
+            report = EndOfShiftReport(
+                shift=shift,
+                report_date=today,
+                section=sections[i],
+                mixing_plant=mixing_plants[i] if i < len(mixing_plants) else '',
+                product=products[i] if i < len(products) else '',
+                filling_sku=filling_skus[i] if i < len(filling_skus) else '',
+                packaging_sku=packaging_skus[i] if i < len(packaging_skus) else '',
+                total_pallets=safe_int(pallets[i]) if i < len(pallets) else 0,
+                total_cartons=safe_int(cartons[i]) if i < len(cartons) else 0,
+                notes=all_notes,
+                submitted_by=current_user.display_name
+            )
+            db.session.add(report)
+        
+        db.session.commit()
+        log_action('SHIFT_REPORT', f'Shift: {shift}, Sections: {len(sections)}')
+        flash('End of shift report submitted!', 'success')
+        return redirect(url_for('dashboard'))
+    
+    # Check if report already submitted for this shift
+    existing = EndOfShiftReport.query.filter_by(shift=shift, report_date=today).first()
+    
+    return render_template('shift_report.html', shift=shift, today=today, already_submitted=existing is not None)
+
+@app.route('/qc/shift-report/print')
+@login_required
+def print_shift_report():
+    if current_user.role not in ['qc', 'production', 'factory', 'md']:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    
+    now = datetime.utcnow()
+    shift = request.args.get('shift', 'A' if 7 <= now.hour < 19 else 'B')
+    date_str = request.args.get('date', now.date().isoformat())
+    report_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+    
+    reports = EndOfShiftReport.query.filter_by(shift=shift, report_date=report_date).order_by(EndOfShiftReport.section).all()
+    return render_template('shift_report_print.html', reports=reports, shift=shift, date=report_date)
 
 # ============================================
 # LOGOUT

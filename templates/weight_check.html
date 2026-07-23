@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block breadcrumb %}
+<span class="text-gray-300">›</span> <span class="text-gray-600">QC Lab</span>
+<span class="text-gray-300">›</span> <span class="text-gray-600">Hourly Weight Check</span>
+{% endblock %}
+{% block content %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+        {% for category, message in messages %}
+        <div class="{% if category == 'error' %}bg-red-100 border-red-400 text-red-700{% elif category == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700{% else %}bg-green-100 border-green-400 text-green-700{% endif %} border px-4 py-3 rounded mb-4">{{ message }}</div>
+        {% endfor %}
+    {% endif %}
+{% endwith %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Entry Form -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold mb-4">⚖️ Hourly Weight Check</h2>
+        <form method="POST">
+            <div class="mb-3">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Product *</label>
+                <input type="text" name="product" required placeholder="e.g., Tomato Paste 400g Tin" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-3">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Weight *</label>
+                    <input type="number" step="0.01" name="weight" required placeholder="e.g., 410" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                    <select name="unit" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
+                        <option value="g">g</option>
+                        <option value="kg">kg</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Min Spec</label><input type="number" step="0.01" name="spec_min" placeholder="Optional" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></div>
+                <div><label class="block text-sm font-medium text-gray-700 mb-1">Max Spec</label><input type="number" step="0.01" name="spec_max" placeholder="Optional" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></div>
+            </div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">✅ Record Weight Check</span></button>
+        </form>
+    </div>
+    
+    <!-- Today's Checks -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-bold mb-4">📋 Today's Weight Checks</h2>
+        {% if checks %}
+        <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">Time</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-right">Weight</th><th class="px-3 py-2 text-left">Status</th><th class="px-3 py-2 text-left">By</th></tr></thead>
+                <tbody>
+                    {% for c in checks %}
+                    <tr class="border-t hover:bg-gray-50">
+                        <td class="px-3 py-2 text-xs">{{ c.check_time.strftime('%H:%M') }}</td>
+                        <td class="px-3 py-2">{{ c.product }}</td>
+                        <td class="px-3 py-2 text-right font-medium">{{ c.weight }} {{ c.unit }}</td>
+                        <td class="px-3 py-2">{% if c.status == 'pass' %}<span class="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">✅ PASS</span>{% else %}<span class="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">❌ FAIL</span>{% endif %}</td>
+                        <td class="px-3 py-2 text-xs text-gray-500">{{ c.recorded_by }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="text-center py-8 text-gray-400"><p>No checks recorded today</p></div>{% endif %}
+    </div>
+</div>
+{% endblock %}
