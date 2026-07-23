@@ -1,112 +1,95 @@
 {% extends "base.html" %}
-{% block content %}
 {% block breadcrumb %}
 <span class="text-gray-300">›</span> <span class="text-gray-600">QC Lab</span>
 {% endblock %}
+{% block content %}
 
-<!-- Flash Messages -->
-{% with messages = get_flashed_messages() %}
+{% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            {{ messages[0] }}
+        {% for category, message in messages %}
+        <div class="{% if category == 'error' %}bg-red-100 border-red-400 text-red-700{% elif category == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700{% else %}bg-green-100 border-green-400 text-green-700{% endif %} border px-4 py-3 rounded mb-4 toast-enter">
+            {{ message }}
         </div>
+        {% endfor %}
     {% endif %}
 {% endwith %}
 
 <!-- Test Result Entry Form -->
-<div class="bg-white rounded-lg shadow p-6 mb-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">🔬 New Test Result Entry</h2>
-        <div class="flex items-center gap-3">
-            <span id="currentShift" class="text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800">SHIFT A</span>
-            <span id="liveClock" class="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded">00:00:00</span>
-            <span id="liveDate" class="text-xs text-gray-500"></span>
+<div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section">
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-form">
+        <span class="collapse-icon text-gray-400">▼</span>
+        <div class="flex justify-between items-center flex-1">
+            <h2 class="text-xl font-bold">🔬 New Test Result Entry</h2>
+            <div class="flex items-center gap-3 no-print">
+                <span id="currentShift" class="text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800">SHIFT A</span>
+                <span id="liveClock" class="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded">00:00:00</span>
+                <span id="liveDate" class="text-xs text-gray-500"></span>
+            </div>
         </div>
     </div>
     
-    <form method="POST" action="{{ url_for('submit_qc_result') }}" id="qcForm">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Formula *</label>
-                <select name="formula_id" id="formulaSelect" required 
-                        class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500" onchange="onFormulaChange()">
-                    <option value="">-- Select Formula --</option>
-                    {% for formula in formulas %}
-                    <option value="{{ formula.id }}" data-code="{{ formula.code }}">{{ formula.code }} - {{ formula.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Batch Number *</label>
-                <input type="text" name="batch_number" id="batchNumberInput" required 
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-gray-50 font-mono"
-                       readonly title="Auto-generated on submission">
-                <p id="batchFormatHint" class="text-xs text-gray-400 mt-1"></p>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Test Date & Time *</label>
-                <input type="datetime-local" name="test_date" id="testDateInput" required 
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-            </div>
-        </div>
-        
-        <div class="mb-4">
-            <div class="flex justify-between items-center mb-2">
-                <label class="block text-sm font-medium text-gray-700">Test Parameters</label>
-                <div class="flex gap-2">
-                    <button type="button" onclick="addParameter()" 
-                            class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
-                        + Add Parameter
-                    </button>
-                    <button type="button" onclick="reopenWorksheet()" 
-                            class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">
-                        📋 Load Worksheet
-                    </button>
-                    <button type="button" onclick="clearAllParameters()" 
-                            class="bg-red-400 text-white px-3 py-1 rounded text-sm hover:bg-red-500">
-                        🗑 Clear All
-                    </button>
+    <div class="section-content">
+        <form method="POST" action="{{ url_for('submit_qc_result') }}" id="qcForm">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Formula *</label>
+                    <select name="formula_id" id="formulaSelect" required 
+                            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500" onchange="onFormulaChange()">
+                        <option value="">-- Select Formula --</option>
+                        {% for formula in formulas %}
+                        <option value="{{ formula.id }}" data-code="{{ formula.code }}">{{ formula.code }} - {{ formula.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Batch Number *</label>
+                    <input type="text" name="batch_number" id="batchNumberInput" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 bg-gray-50 font-mono"
+                           readonly title="Auto-generated on submission">
+                    <p id="batchFormatHint" class="text-xs text-gray-400 mt-1"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Test Date & Time *</label>
+                    <input type="datetime-local" name="test_date" id="testDateInput" required 
+                           class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
                 </div>
             </div>
             
-            <div id="parametersContainer">
-                <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
-                    <div class="col-span-3">
-                        <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
-                            <option value="">Select parameter...</option>
-                        </select>
+            <div class="mb-4">
+                <div class="flex justify-between items-center mb-2">
+                    <label class="block text-sm font-medium text-gray-700">Test Parameters</label>
+                    <div class="flex gap-2">
+                        <button type="button" onclick="addParameter()" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">+ Add Parameter</button>
+                        <button type="button" onclick="reopenWorksheet()" class="bg-blue-500 text-white px-3 py-1 rounded text-sm hover:bg-blue-600">📋 Load Worksheet</button>
+                        <button type="button" onclick="clearAllParameters()" class="bg-red-400 text-white px-3 py-1 rounded text-sm hover:bg-red-500">🗑 Clear All</button>
                     </div>
-                    <div class="col-span-2">
-                        <input type="text" name="param_result[]" placeholder="Result" 
-                               class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)">
-                    </div>
-                    <div class="col-span-2">
-                        <input type="text" name="param_unit[]" placeholder="Unit" readonly
-                               class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
-                    </div>
-                    <div class="col-span-3">
-                        <input type="text" name="param_spec[]" placeholder="Spec range" readonly
-                               class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500">
-                    </div>
-                    <div class="col-span-2">
-                        <button type="button" onclick="removeParameter(this)" 
-                                class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button>
+                </div>
+                <div id="parametersContainer">
+                    <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
+                        <div class="col-span-3">
+                            <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
+                                <option value="">Select parameter...</option>
+                            </select>
+                        </div>
+                        <div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div>
+                        <div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>
+                        <div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec range" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>
+                        <div class="col-span-2"><button type="button" onclick="removeParameter(this)" class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button></div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-            <textarea name="notes" rows="2" placeholder="Any observations or comments..."
-                      class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
-        </div>
-        
-        <button type="submit" 
-                class="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg">
-            ✅ Submit Test Result
-        </button>
-    </form>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea name="notes" rows="2" placeholder="Any observations or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg">
+                <span class="btn-spinner spinner" style="display:none"></span>
+                <span class="btn-text">✅ Submit Test Result</span>
+            </button>
+        </form>
+    </div>
 </div>
 
 <!-- WORKSHEET MODAL -->
@@ -117,523 +100,103 @@
                 <h2 class="text-lg font-bold">📋 Lab Worksheet</h2>
                 <button onclick="closeWorksheet()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
             </div>
-            <div id="worksheetContent">
-                <p class="text-gray-500 text-sm">Select a formula to load its worksheet parameters.</p>
-            </div>
+            <div id="worksheetContent"><p class="text-gray-500 text-sm">Select a formula to load its worksheet parameters.</p></div>
             <div class="mt-4 pt-4 border-t flex gap-2">
-                <button onclick="loadWorksheetToForm()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold text-sm">
-                    📋 Load These Parameters
-                </button>
-                <button onclick="closeWorksheet()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm">
-                    Cancel
-                </button>
+                <button onclick="loadWorksheetToForm()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold text-sm">📋 Load These Parameters</button>
+                <button onclick="closeWorksheet()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm">Cancel</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- PARAMETER TRENDS CHART -->
-<div class="bg-white rounded-lg shadow p-6 mb-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">📈 Parameter Trends</h2>
-        <div class="flex gap-2">
-            <select id="trendFormulaFilter" onchange="updateTrendChart()" 
-                    class="px-3 py-1 border border-gray-300 rounded text-sm">
-                <option value="all">All Formulas</option>
-                {% for formula in formulas %}
-                <option value="{{ formula.id }}">{{ formula.code }}</option>
-                {% endfor %}
-            </select>
-            <select id="trendParamFilter" onchange="updateTrendChart()" 
-                    class="px-3 py-1 border border-gray-300 rounded text-sm">
-                <option value="all">All Parameters</option>
-            </select>
+<div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section">
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-trends">
+        <span class="collapse-icon text-gray-400">▼</span>
+        <div class="flex justify-between items-center flex-1">
+            <h2 class="text-xl font-bold">📈 Parameter Trends</h2>
+            <div class="flex gap-2 no-print" onclick="event.stopPropagation()">
+                <select id="trendFormulaFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
+                    <option value="all">All Formulas</option>
+                    {% for formula in formulas %}<option value="{{ formula.id }}">{{ formula.code }}</option>{% endfor %}
+                </select>
+                <select id="trendParamFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
+                    <option value="all">All Parameters</option>
+                </select>
+            </div>
         </div>
     </div>
-    <div class="relative" style="height: 350px;">
-        <canvas id="trendChart"></canvas>
-    </div>
+    <div class="section-content"><div class="relative" style="height: 350px;"><canvas id="trendChart"></canvas></div></div>
 </div>
 
 <!-- Recent Submissions Table -->
-<div class="bg-white rounded-lg shadow p-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">📊 Recent Test Submissions</h2>
-        <a href="{{ url_for('export_qc_results') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print">📥 Export CSV</a>
+<div class="bg-white rounded-lg shadow p-6 collapsible-section">
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-recent">
+        <span class="collapse-icon text-gray-400">▼</span>
+        <div class="flex justify-between items-center flex-1">
+            <h2 class="text-xl font-bold">📊 Recent Test Submissions</h2>
+            <a href="{{ url_for('export_qc_results') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print" onclick="event.stopPropagation()">📥 Export CSV</a>
+        </div>
     </div>
-    {% if recent_tests %}
-    <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-2 text-left">Batch #</th>
-                    <th class="px-4 py-2 text-left">Formula</th>
-                    <th class="px-4 py-2 text-left">Date</th>
-                    <th class="px-4 py-2 text-left">Parameters</th>
-                    <th class="px-4 py-2 text-left">Status</th>
-                    <th class="px-4 py-2 text-left">Tester</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for test in recent_tests %}
-                <tr class="border-t hover:bg-gray-50">
-                    <td class="px-4 py-2 font-medium font-mono">{{ test.batch_number }}</td>
-                    <td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td>
-                    <td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '' }}</td>
-                    <td class="px-4 py-2">{% if test.parameters %}<span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>{% endif %}</td>
-                    <td class="px-4 py-2">
-                        {% if test.status == 'pass' %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>
-                        {% elif test.status == 'fail' %}<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>
-                        {% else %}<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>{% endif %}
-                    </td>
-                    <td class="px-4 py-2 text-gray-500">{{ test.tested_by }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <div class="section-content">
+        {% if recent_tests %}
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">Batch #</th><th class="px-4 py-2 text-left">Formula</th><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-left">Parameters</th><th class="px-4 py-2 text-left">Status</th><th class="px-4 py-2 text-left">Tester</th></tr></thead>
+                <tbody>
+                    {% for test in recent_tests %}
+                    <tr class="border-t hover:bg-gray-50">
+                        <td class="px-4 py-2 font-medium font-mono">{{ test.batch_number }}</td>
+                        <td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td>
+                        <td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '' }}</td>
+                        <td class="px-4 py-2">{% if test.parameters %}<span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>{% endif %}</td>
+                        <td class="px-4 py-2">{% if test.status == 'pass' %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>{% elif test.status == 'fail' %}<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>{% else %}<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>{% endif %}</td>
+                        <td class="px-4 py-2 text-gray-500">{{ test.tested_by }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}<div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">📋</p><p>No test results submitted yet</p></div>{% endif %}
     </div>
-    {% else %}
-    <div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">📋</p><p>No test results submitted yet</p></div>
-    {% endif %}
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
 <script>
-// ============================================
-// PRODUCT CLASSIFICATION
-// ============================================
-// Tomato Paste: F-021A, F-021C, F-022, F-024, F-025
-// Tomato Mix: F-021B, F-023
-// Other products: everything else
-
-var tomatoPasteCodes = ['F-021A', 'F-021C', 'F-022', 'F-024', 'F-025'];
-var tomatoMixCodes = ['F-021B', 'F-023'];
-var allTomatoCodes = tomatoPasteCodes.concat(tomatoMixCodes);
-
-function getProductType(code) {
-    if (tomatoPasteCodes.indexOf(code) !== -1) return 'paste';
-    if (tomatoMixCodes.indexOf(code) !== -1) return 'mix';
-    return 'other';
-}
-
-// ============================================
-// BASE PARAMETER DEFINITIONS (units, auto flags)
-// ============================================
-var baseParams = {
-    'TEMPERATURE': { unit: '°C' },
-    'BRIX': { unit: '°Bx' },
-    'SALT': { unit: '%' },
-    '%SALT': { unit: '%', auto: true },
-    'COLOUR': { unit: '' },
-    'BRIGHTNESS': { unit: '%' },
-    'pH': { unit: '' },
-    'ACIDITY': { unit: '%' },
-    'BOSTWICK': { unit: 'cm', auto: true },
-    'APPEARANCE': { unit: '' },
-    'MOISTURE': { unit: '%' }
-};
-
-// ============================================
-// SPEC RANGES BY PRODUCT TYPE
-// ============================================
-var specsPaste = {
-    'TEMPERATURE': { min: 60, max: 85 },
-    'BRIX': { min: 20, max: 30 },
-    'SALT': { min: 1, max: null, note: 'Must be less than BRIX value' },
-    '%SALT': { min: null, max: null },
-    'COLOUR': { min: 1.5, max: null },
-    'BRIGHTNESS': { min: null, max: null },
-    'pH': { min: 3.6, max: 4.5 },
-    'ACIDITY': { min: null, max: 2.5 },
-    'BOSTWICK': { min: null, max: null },
-    'APPEARANCE': { min: null, max: null },
-    'MOISTURE': { min: null, max: null }
-};
-
-var specsMix = {
-    'TEMPERATURE': { min: 60, max: 85 },
-    'BRIX': { min: 13, max: 21 },
-    'SALT': { min: 1, max: null, note: 'Must be less than BRIX value' },
-    '%SALT': { min: null, max: null },
-    'COLOUR': { min: 1.5, max: null },
-    'BRIGHTNESS': { min: null, max: null },
-    'pH': { min: 3.6, max: 4.5 },
-    'ACIDITY': { min: null, max: 2.5 },
-    'BOSTWICK': { min: null, max: null },
-    'APPEARANCE': { min: null, max: null },
-    'MOISTURE': { min: null, max: null }
-};
-
-var specsOther = {
-    'TEMPERATURE': { min: null, max: null },
-    'BRIX': { min: null, max: null },
-    'SALT': { min: null, max: null },
-    '%SALT': { min: null, max: null },
-    'COLOUR': { min: null, max: null },
-    'BRIGHTNESS': { min: null, max: null },
-    'pH': { min: 5.5, max: 7.5 },
-    'ACIDITY': { min: null, max: null },
-    'BOSTWICK': { min: null, max: null },
-    'APPEARANCE': { min: null, max: null },
-    'MOISTURE': { min: null, max: 5.0 }
-};
-
-// Tomato paste params list (order)
-var tomatoPasteParams = ['TEMPERATURE', 'BRIX', 'SALT', '%SALT', 'COLOUR', 'BRIGHTNESS', 'pH', 'ACIDITY', 'BOSTWICK'];
-var tomatoMixParams = ['TEMPERATURE', 'BRIX', 'SALT', '%SALT', 'COLOUR', 'BRIGHTNESS', 'pH', 'ACIDITY', 'BOSTWICK'];
-var otherParams = ['APPEARANCE', 'pH', 'ACIDITY', 'MOISTURE'];
-
-function getSpecs(code) {
-    var type = getProductType(code);
-    if (type === 'paste') return specsPaste;
-    if (type === 'mix') return specsMix;
-    return specsOther;
-}
-
-function getParamList(code) {
-    var type = getProductType(code);
-    if (type === 'paste') return tomatoPasteParams;
-    if (type === 'mix') return tomatoMixParams;
-    return otherParams;
-}
-
-function buildAllParams(code) {
-    var specs = getSpecs(code);
-    var result = {};
-    for (var key in baseParams) {
-        if (baseParams.hasOwnProperty(key)) {
-            var bp = baseParams[key];
-            var sp = specs[key] || { min: null, max: null };
-            result[key] = {
-                name: key,
-                unit: bp.unit,
-                min: sp.min,
-                max: sp.max,
-                auto: bp.auto || false,
-                note: sp.note || ''
-            };
-        }
-    }
-    return result;
-}
-
-// ============================================
-// SHIFT & CLOCK
-// ============================================
-function getCurrentShift() {
-    var h = new Date().getHours();
-    return (h >= 7 && h < 19) ? 'A' : 'B';
-}
-
-function updateBatchPreview() {
-    var select = document.getElementById('formulaSelect');
-    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
-    var input = document.getElementById('batchNumberInput');
-    var hint = document.getElementById('batchFormatHint');
-    
-    if (!code) { input.value = ''; hint.textContent = ''; return; }
-    
-    var now = new Date();
-    var shift = getCurrentShift();
-    var isTomato = allTomatoCodes.indexOf(code) !== -1;
-    
-    if (isTomato) {
-        var dd = String(now.getDate()).padStart(2, '0');
-        var mm = String(now.getMonth() + 1).padStart(2, '0');
-        input.value = dd + mm + '-' + shift + '-XXX';
-        hint.textContent = 'Format: DDMM-Shift-Seq — Number assigned on submission';
-    } else {
-        var mmyy = String(now.getMonth() + 1).padStart(2, '0') + String(now.getFullYear()).slice(-2);
-        input.value = mmyy + '-' + shift + '-XXX';
-        hint.textContent = 'Format: MMYY-Shift-Seq — Number assigned on submission';
-    }
-}
-
-function updateLiveClock() {
-    var now = new Date();
-    var h = String(now.getHours()).padStart(2, '0');
-    var m = String(now.getMinutes()).padStart(2, '0');
-    var s = String(now.getSeconds()).padStart(2, '0');
-    document.getElementById('liveClock').textContent = h + ':' + m + ':' + s;
-    
-    var shift = getCurrentShift();
-    var label = shift === 'A' ? 'SHIFT A' : 'SHIFT B';
-    var cls = shift === 'A' ? 'bg-blue-100 text-blue-800' : 'bg-indigo-100 text-indigo-800';
-    var el = document.getElementById('currentShift');
-    el.textContent = label;
-    el.className = 'text-xs px-2 py-1 rounded font-medium ' + cls;
-    
-    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    document.getElementById('liveDate').textContent = days[now.getDay()] + ', ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
-    
-    document.getElementById('testDateInput').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0') + 'T' + h + ':' + m;
-}
-
-// ============================================
-// FORMULA CHANGE
-// ============================================
-var currentFormulaCode = '';
-
-function onFormulaChange() {
-    var select = document.getElementById('formulaSelect');
-    var code = select.selectedIndex > 0 ? select.options[select.selectedIndex].getAttribute('data-code') : '';
-    currentFormulaCode = code;
-    if (code) {
-        var params = getParamList(code);
-        var type = getProductType(code);
-        var typeLabel = type === 'paste' ? '🍅 Tomato Paste' : (type === 'mix' ? '🥫 Tomato Mix' : '📦 Dry Food / Seasoning / Cube');
-        showWorksheet(code, select.options[select.selectedIndex].text, params, typeLabel);
-    }
-    updateBatchPreview();
-}
-
-function reopenWorksheet() {
-    if (currentFormulaCode) onFormulaChange();
-    else alert('Please select a formula first.');
-}
-
-function showWorksheet(code, name, params, typeLabel) {
-    var allP = buildAllParams(code);
-    var html = '<div class="mb-3"><span class="font-semibold">' + code + '</span> - ' + name + '</div>';
-    html += '<div class="text-xs text-gray-500 mb-3">Product Type: ' + typeLabel + '</div>';
-    html += '<div class="text-xs text-gray-400 mb-2">' + params.length + ' parameters will be loaded</div>';
-    html += '<div class="border rounded-lg overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Parameter</th><th class="px-3 py-2 text-left">Unit</th><th class="px-3 py-2 text-left">Spec Range</th></tr></thead><tbody>';
-    for (var i = 0; i < params.length; i++) {
-        var p = allP[params[i]];
-        if (!p) continue;
-        var spec = '-';
-        if (p.min !== null && p.max !== null) spec = p.min + ' - ' + p.max;
-        else if (p.min !== null) spec = '\u2265 ' + p.min;
-        else if (p.max !== null) spec = '\u2264 ' + p.max;
-        if (p.note) spec += ' (' + p.note + ')';
-        html += '<tr class="border-t"><td class="px-3 py-1 text-gray-400 text-xs">' + (i+1) + '</td><td class="px-3 py-1 font-medium">' + p.name + (p.auto ? ' ⚡' : '') + '</td><td class="px-3 py-1 text-gray-500">' + (p.unit || '-') + '</td><td class="px-3 py-1 text-gray-500">' + spec + '</td></tr>';
-    }
-    html += '</tbody></table></div><div class="text-xs text-gray-400 mt-2">⚡ = Auto-calculated value</div>';
-    document.getElementById('worksheetContent').innerHTML = html;
-    document.getElementById('worksheetModal').classList.remove('hidden');
-}
-
-function closeWorksheet() { document.getElementById('worksheetModal').classList.add('hidden'); }
-
-function loadWorksheetToForm() {
-    if (!currentFormulaCode) { closeWorksheet(); return; }
-    var params = getParamList(currentFormulaCode);
-    var allP = buildAllParams(currentFormulaCode);
-    var container = document.getElementById('parametersContainer');
-    container.innerHTML = '';
-    for (var i = 0; i < params.length; i++) {
-        var pd = allP[params[i]];
-        if (!pd) continue;
-        var row = createParameterRow(currentFormulaCode);
-        row.querySelector('.param-name').value = pd.name;
-        onParamChange(row.querySelector('.param-name'));
-        container.appendChild(row);
-    }
-    updateBatchPreview();
-    closeWorksheet();
-}
-
-function clearAllParameters() {
-    if (confirm('Clear all loaded parameters? This cannot be undone.')) {
-        document.getElementById('parametersContainer').innerHTML = '';
-        document.getElementById('parametersContainer').appendChild(createParameterRow(''));
-        document.getElementById('formulaSelect').value = '';
-        document.getElementById('batchNumberInput').value = '';
-        document.getElementById('batchFormatHint').textContent = '';
-        currentFormulaCode = '';
-    }
-}
-
-function createParameterRow(code) {
-    var allP = buildAllParams(code || currentFormulaCode || '');
-    var row = document.createElement('div');
-    row.className = 'parameter-row grid grid-cols-12 gap-2 mb-2 items-end';
-    var opts = '<option value="">Select parameter...</option>';
-    for (var k in allP) {
-        if (allP.hasOwnProperty(k)) {
-            var p = allP[k];
-            opts += '<option value="' + p.name + '" data-unit="' + (p.unit||'') + '" data-min="' + (p.min!==null?p.min:'') + '" data-max="' + (p.max!==null?p.max:'') + '" data-note="' + (p.note||'') + '">' + p.name + '</option>';
-        }
-    }
-    row.innerHTML = '<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">' + opts + '</select></div>' +
-        '<div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div>' +
-        '<div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
-        '<div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec range" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>' +
-        '<div class="col-span-2"><button type="button" onclick="removeParameter(this)" class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button></div>';
-    return row;
-}
-
-function addParameter() { 
-    document.getElementById('parametersContainer').appendChild(createParameterRow(currentFormulaCode)); 
-}
-
-function removeParameter(btn) {
-    var c = document.getElementById('parametersContainer');
-    if (c.querySelectorAll('.parameter-row').length > 1) { btn.closest('.parameter-row').remove(); runAutoCalculations(); }
-}
-
-function onParamChange(select) {
-    var row = select.closest('.parameter-row');
-    var unitEl = row.querySelector('.param-unit');
-    var specEl = row.querySelector('.param-spec');
-    var resEl = row.querySelector('.param-result');
-    var opt = select.options[select.selectedIndex];
-    var unit = opt.getAttribute('data-unit') || '';
-    var min = opt.getAttribute('data-min') || '';
-    var max = opt.getAttribute('data-max') || '';
-    var note = opt.getAttribute('data-note') || '';
-    
-    unitEl.value = unit;
-    if (min && max) specEl.value = min + ' - ' + max;
-    else if (min) specEl.value = '\u2265 ' + min;
-    else if (max) specEl.value = '\u2264 ' + max;
-    else specEl.value = '';
-    if (note) specEl.value += ' (' + note + ')';
-    
-    var nm = select.value.toUpperCase();
-    var allP = buildAllParams(currentFormulaCode);
-    if (allP[nm] && allP[nm].auto) {
-        resEl.classList.add('bg-blue-50', 'border-blue-300');
-        resEl.setAttribute('data-auto', 'true');
-        resEl.setAttribute('readonly', 'readonly');
-        resEl.title = 'Auto-calculated value';
-    }
-    resEl.classList.remove('border-green-500', 'border-red-500', 'bg-green-50', 'bg-red-50');
-    if (resEl.getAttribute('data-auto') === 'true') resEl.classList.add('bg-blue-50', 'border-blue-300');
-    if (resEl.value && min && max) {
-        var v = parseFloat(resEl.value);
-        if (!isNaN(v)) {
-            if (v >= parseFloat(min) && v <= parseFloat(max)) resEl.classList.add('border-green-500', 'bg-green-50');
-            else resEl.classList.add('border-red-500', 'bg-red-50');
-        }
-    }
-    // SALT special validation: must be less than BRIX
-    if (nm === 'SALT') {
-        validateSaltVsBrix(resEl);
-    }
-}
-
-function validateSaltVsBrix(saltInput) {
-    var rows = document.querySelectorAll('.parameter-row');
-    var brixVal = null;
-    for (var i = 0; i < rows.length; i++) {
-        var s = rows[i].querySelector('.param-name');
-        if (s && s.value.toUpperCase() === 'BRIX') {
-            var r = rows[i].querySelector('.param-result');
-            if (r && r.value) brixVal = parseFloat(r.value);
-        }
-    }
-    if (brixVal !== null && saltInput.value) {
-        var saltVal = parseFloat(saltInput.value);
-        if (!isNaN(saltVal) && saltVal >= brixVal) {
-            saltInput.classList.add('border-red-500', 'bg-red-50');
-        }
-    }
-}
-
-function getParamValue(name) {
-    var rows = document.querySelectorAll('.parameter-row');
-    for (var i = 0; i < rows.length; i++) {
-        var s = rows[i].querySelector('.param-name');
-        if (s && s.value.toUpperCase() === name.toUpperCase()) {
-            var r = rows[i].querySelector('.param-result');
-            if (r && r.value && !r.hasAttribute('data-auto')) return parseFloat(r.value);
-        }
-    }
-    return null;
-}
-
-function setParamValue(name, val) {
-    var rows = document.querySelectorAll('.parameter-row');
-    for (var i = 0; i < rows.length; i++) {
-        var s = rows[i].querySelector('.param-name');
-        if (s && s.value.toUpperCase() === name.toUpperCase()) {
-            var r = rows[i].querySelector('.param-result');
-            if (r) {
-                r.value = val.toFixed(2);
-                r.classList.add('bg-blue-50', 'border-blue-300');
-                r.setAttribute('data-auto', 'true');
-                r.setAttribute('readonly', 'readonly');
-                r.title = 'Auto-calculated value';
-                onParamChange(s);
-            }
-            return;
-        }
-    }
-}
-
-function runAutoCalculations() {
-    var sv = getParamValue('SALT');
-    if (sv !== null) setParamValue('%SALT', sv * 0.08);
-    var tv = getParamValue('TEMPERATURE');
-    var bv = getParamValue('BRIX');
-    if (tv !== null && bv !== null) setParamValue('BOSTWICK', (tv * 0.013) + (bv * 0.08) + 2.98);
-}
-
-function onResultInput(input) {
-    if (input.getAttribute('data-auto') === 'true') return;
-    var s = input.closest('.parameter-row').querySelector('.param-name');
-    if (s && s.value) onParamChange(s);
-    runAutoCalculations();
-}
-
-// Trend chart
-var trendChart = null;
-var allTests = [{% for test in recent_tests %}{id:{{test.id}},batch:"{{test.batch_number}}",formula_id:{{test.formula_id}},formula_code:"{{test.formula.code if test.formula else 'N/A'}}",date:"{{test.test_date.strftime('%Y-%m-%d') if test.test_date else ''}}",status:"{{test.status}}",parameters:{{test.parameters|safe if test.parameters else '[]'}}},{% endfor %}];
-allTests.reverse();
-var chartColors = ['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#14B8A6','#E11D48','#7C3AED','#0891B2','#D97706','#059669'];
-
-function buildParamDropdown() {
-    var set = new Set();
-    allTests.forEach(function(t) {
-        var p = t.parameters;
-        if (typeof p === 'string') { try { p = JSON.parse(p); } catch(e) { return; } }
-        if (p) p.forEach(function(x) { if (x.name) set.add(x.name); });
-    });
-    var s = document.getElementById('trendParamFilter');
-    s.innerHTML = '<option value="all">All Parameters</option>';
-    set.forEach(function(x) { s.innerHTML += '<option value="'+x+'">'+x+'</option>'; });
-}
-
-function updateTrendChart() {
-    var ff = document.getElementById('trendFormulaFilter').value;
-    var pf = document.getElementById('trendParamFilter').value;
-    var ft = allTests;
-    if (ff !== 'all') ft = ft.filter(function(t) { return t.formula_id == ff; });
-    var ds = {};
-    ft.forEach(function(t, i) {
-        var p = t.parameters;
-        if (typeof p === 'string') { try { p = JSON.parse(p); } catch(e) { return; } }
-        if (!p) return;
-        p.forEach(function(x) {
-            if (!x.name) return;
-            if (pf !== 'all' && x.name !== pf) return;
-            var v = parseFloat(x.result);
-            if (isNaN(v)) return;
-            if (!ds[x.name]) {
-                ds[x.name] = {label: x.name + (x.unit?' ('+x.unit+')':''), data: [], borderColor: chartColors[Object.keys(ds).length % chartColors.length], backgroundColor: chartColors[Object.keys(ds).length % chartColors.length]+'20', borderWidth: 2, tension: 0.3, fill: false, pointRadius: 4, pointHoverRadius: 6};
-            }
-            while (ds[x.name].data.length < i) ds[x.name].data.push(null);
-            ds[x.name].data.push(v);
-        });
-    });
-    var labels = ft.map(function(t) { return t.batch; });
-    if (trendChart) trendChart.destroy();
-    var ctx = document.getElementById('trendChart').getContext('2d');
-    var arr = Object.values(ds);
-    if (arr.length === 0) { ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height); return; }
-    trendChart = new Chart(ctx, {type:'line', data:{labels:labels, datasets:arr}, options:{responsive:true, maintainAspectRatio:false, interaction:{intersect:false, mode:'index'}, plugins:{legend:{position:'bottom', labels:{usePointStyle:true, padding:20, font:{size:11}}}}, scales:{x:{title:{display:true, text:'Batch', font:{size:11}}, ticks:{maxRotation:45, font:{size:10}}}, y:{title:{display:true, text:'Result Value', font:{size:11}}, beginAtZero:false, ticks:{font:{size:10}}}}}});
-}
-
-document.getElementById('worksheetModal').addEventListener('click', function(e) { if (e.target === this) closeWorksheet(); });
-
-document.addEventListener('DOMContentLoaded', function() {
-    updateLiveClock();
-    setInterval(updateLiveClock, 1000);
-    buildParamDropdown();
-    if (allTests.length > 0) updateTrendChart();
-});
+var tomatoPasteCodes=['F-021A','F-021C','F-022','F-024','F-025'],tomatoMixCodes=['F-021B','F-023'],allTomatoCodes=tomatoPasteCodes.concat(tomatoMixCodes);
+function getProductType(c){if(tomatoPasteCodes.indexOf(c)!==-1)return'paste';if(tomatoMixCodes.indexOf(c)!==-1)return'mix';return'other';}
+var baseParams={'TEMPERATURE':{unit:'°C'},'BRIX':{unit:'°Bx'},'SALT':{unit:'%'},'%SALT':{unit:'%',auto:true},'COLOUR':{unit:''},'BRIGHTNESS':{unit:'%'},'pH':{unit:''},'ACIDITY':{unit:'%'},'BOSTWICK':{unit:'cm',auto:true},'APPEARANCE':{unit:''},'MOISTURE':{unit:'%'}};
+var specsPaste={'TEMPERATURE':{min:60,max:85},'BRIX':{min:20,max:30},'SALT':{min:1,max:null,note:'Must be less than BRIX'},'%SALT':{min:null,max:null},'COLOUR':{min:1.5,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:3.6,max:4.5},'ACIDITY':{min:null,max:2.5},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:null}};
+var specsMix={'TEMPERATURE':{min:60,max:85},'BRIX':{min:13,max:21},'SALT':{min:1,max:null,note:'Must be less than BRIX'},'%SALT':{min:null,max:null},'COLOUR':{min:1.5,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:3.6,max:4.5},'ACIDITY':{min:null,max:2.5},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:null}};
+var specsOther={'TEMPERATURE':{min:null,max:null},'BRIX':{min:null,max:null},'SALT':{min:null,max:null},'%SALT':{min:null,max:null},'COLOUR':{min:null,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:5.5,max:7.5},'ACIDITY':{min:null,max:null},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:5.0}};
+var tpParams=['TEMPERATURE','BRIX','SALT','%SALT','COLOUR','BRIGHTNESS','pH','ACIDITY','BOSTWICK'],tmParams=['TEMPERATURE','BRIX','SALT','%SALT','COLOUR','BRIGHTNESS','pH','ACIDITY','BOSTWICK'],otParams=['APPEARANCE','pH','ACIDITY','MOISTURE'];
+function getSpecs(c){var t=getProductType(c);if(t==='paste')return specsPaste;if(t==='mix')return specsMix;return specsOther;}
+function getParamList(c){var t=getProductType(c);if(t==='paste')return tpParams;if(t==='mix')return tmParams;return otParams;}
+function buildAllParams(c){var s=getSpecs(c),r={};for(var k in baseParams){if(baseParams.hasOwnProperty(k)){var bp=baseParams[k],sp=s[k]||{min:null,max:null};r[k]={name:k,unit:bp.unit,min:sp.min,max:sp.max,auto:bp.auto||false,note:sp.note||''};}}return r;}
+function getCurrentShift(){var h=new Date().getHours();return(h>=7&&h<19)?'A':'B';}
+function updateBatchPreview(){var s=document.getElementById('formulaSelect'),code=s.selectedIndex>0?s.options[s.selectedIndex].getAttribute('data-code'):'',input=document.getElementById('batchNumberInput'),hint=document.getElementById('batchFormatHint');if(!code){input.value='';hint.textContent='';return;}var now=new Date(),shift=getCurrentShift(),isTomato=allTomatoCodes.indexOf(code)!==-1;if(isTomato){input.value=String(now.getDate()).padStart(2,'0')+String(now.getMonth()+1).padStart(2,'0')+'-'+shift+'-XXX';hint.textContent='Format: DDMM-Shift-Seq';}else{input.value=String(now.getMonth()+1).padStart(2,'0')+String(now.getFullYear()).slice(-2)+'-'+shift+'-XXX';hint.textContent='Format: MMYY-Shift-Seq';}}
+function updateLiveClock(){var now=new Date();document.getElementById('liveClock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');var shift=getCurrentShift(),el=document.getElementById('currentShift');el.textContent=shift==='A'?'SHIFT A':'SHIFT B';el.className='text-xs px-2 py-1 rounded font-medium '+(shift==='A'?'bg-blue-100 text-blue-800':'bg-indigo-100 text-indigo-800');var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];document.getElementById('liveDate').textContent=days[now.getDay()]+', '+now.getDate()+' '+months[now.getMonth()]+' '+now.getFullYear();document.getElementById('testDateInput').value=now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0')+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');}
+var currentFormulaCode='';
+function onFormulaChange(){var s=document.getElementById('formulaSelect');currentFormulaCode=s.selectedIndex>0?s.options[s.selectedIndex].getAttribute('data-code'):'';if(currentFormulaCode){var p=getParamList(currentFormulaCode),t=getProductType(currentFormulaCode),l=t==='paste'?'🍅 Tomato Paste':(t==='mix'?'🥫 Tomato Mix':'📦 Dry Food / Seasoning / Cube');showWorksheet(currentFormulaCode,s.options[s.selectedIndex].text,p,l);}updateBatchPreview();}
+function reopenWorksheet(){if(currentFormulaCode)onFormulaChange();else alert('Select a formula first.');}
+function showWorksheet(code,name,params,label){var allP=buildAllParams(code),html='<div class="mb-3"><span class="font-semibold">'+code+'</span> - '+name+'</div><div class="text-xs text-gray-500 mb-3">'+label+'</div><div class="text-xs text-gray-400 mb-2">'+params.length+' parameters</div><div class="border rounded overflow-hidden"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-3 py-2 text-left">#</th><th class="px-3 py-2 text-left">Parameter</th><th class="px-3 py-2 text-left">Unit</th><th class="px-3 py-2 text-left">Spec</th></tr></thead><tbody>';for(var i=0;i<params.length;i++){var p=allP[params[i]];if(!p)continue;var spec='-';if(p.min!==null&&p.max!==null)spec=p.min+' - '+p.max;else if(p.min!==null)spec='\u2265 '+p.min;else if(p.max!==null)spec='\u2264 '+p.max;if(p.note)spec+=' ('+p.note+')';html+='<tr class="border-t"><td class="px-3 py-1 text-gray-400 text-xs">'+(i+1)+'</td><td class="px-3 py-1 font-medium">'+p.name+(p.auto?' ⚡':'')+'</td><td class="px-3 py-1 text-gray-500">'+(p.unit||'-')+'</td><td class="px-3 py-1 text-gray-500">'+spec+'</td></tr>';}html+='</tbody></table></div><div class="text-xs text-gray-400 mt-2">⚡ = Auto-calculated</div>';document.getElementById('worksheetContent').innerHTML=html;document.getElementById('worksheetModal').classList.remove('hidden');}
+function closeWorksheet(){document.getElementById('worksheetModal').classList.add('hidden');}
+function loadWorksheetToForm(){if(!currentFormulaCode){closeWorksheet();return;}var params=getParamList(currentFormulaCode),allP=buildAllParams(currentFormulaCode),c=document.getElementById('parametersContainer');c.innerHTML='';for(var i=0;i<params.length;i++){var pd=allP[params[i]];if(!pd)continue;var row=createParameterRow();row.querySelector('.param-name').value=pd.name;onParamChange(row.querySelector('.param-name'));c.appendChild(row);}updateBatchPreview();closeWorksheet();}
+function clearAllParameters(){if(confirm('Clear all parameters?')){document.getElementById('parametersContainer').innerHTML='';document.getElementById('parametersContainer').appendChild(createParameterRow());document.getElementById('formulaSelect').value='';document.getElementById('batchNumberInput').value='';document.getElementById('batchFormatHint').textContent='';currentFormulaCode='';}}
+function createParameterRow(){var allP=buildAllParams(currentFormulaCode||''),row=document.createElement('div');row.className='parameter-row grid grid-cols-12 gap-2 mb-2 items-end';var opts='<option value="">Select...</option>';for(var k in allP){if(allP.hasOwnProperty(k)){var p=allP[k];opts+='<option value="'+p.name+'" data-unit="'+(p.unit||'')+'" data-min="'+(p.min!==null?p.min:'')+'" data-max="'+(p.max!==null?p.max:'')+'" data-note="'+(p.note||'')+'">'+p.name+'</option>';}}row.innerHTML='<div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">'+opts+'</select></div><div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div><div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div><div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div><div class="col-span-2"><button type="button" onclick="removeParameter(this)" class="text-red-500 hover:text-red-700 text-sm">✕ Remove</button></div>';return row;}
+function addParameter(){document.getElementById('parametersContainer').appendChild(createParameterRow());}
+function removeParameter(b){var c=document.getElementById('parametersContainer');if(c.querySelectorAll('.parameter-row').length>1){b.closest('.parameter-row').remove();runAutoCalculations();}}
+function onParamChange(s){var row=s.closest('.parameter-row'),ue=row.querySelector('.param-unit'),se=row.querySelector('.param-spec'),re=row.querySelector('.param-result'),opt=s.options[s.selectedIndex],unit=opt.getAttribute('data-unit')||'',min=opt.getAttribute('data-min')||'',max=opt.getAttribute('data-max')||'',note=opt.getAttribute('data-note')||'';ue.value=unit;if(min&&max)se.value=min+' - '+max;else if(min)se.value='\u2265 '+min;else if(max)se.value='\u2264 '+max;else se.value='';if(note)se.value+=' ('+note+')';var nm=s.value.toUpperCase(),allP=buildAllParams(currentFormulaCode);if(allP[nm]&&allP[nm].auto){re.classList.add('bg-blue-50','border-blue-300');re.setAttribute('data-auto','true');re.setAttribute('readonly','readonly');re.title='Auto-calculated';}re.classList.remove('border-green-500','border-red-500','bg-green-50','bg-red-50');if(re.getAttribute('data-auto')==='true')re.classList.add('bg-blue-50','border-blue-300');if(re.value&&min&&max){var v=parseFloat(re.value);if(!isNaN(v)){if(v>=parseFloat(min)&&v<=parseFloat(max))re.classList.add('border-green-500','bg-green-50');else re.classList.add('border-red-500','bg-red-50');}}if(nm==='SALT')validateSaltVsBrix(re);}
+function validateSaltVsBrix(si){var rows=document.querySelectorAll('.parameter-row'),bv=null;for(var i=0;i<rows.length;i++){var s=rows[i].querySelector('.param-name');if(s&&s.value.toUpperCase()==='BRIX'){var r=rows[i].querySelector('.param-result');if(r&&r.value)bv=parseFloat(r.value);}}if(bv!==null&&si.value){var sv=parseFloat(si.value);if(!isNaN(sv)&&sv>=bv)si.classList.add('border-red-500','bg-red-50');}}
+function getParamValue(n){var rows=document.querySelectorAll('.parameter-row');for(var i=0;i<rows.length;i++){var s=rows[i].querySelector('.param-name');if(s&&s.value.toUpperCase()===n.toUpperCase()){var r=rows[i].querySelector('.param-result');if(r&&r.value&&!r.hasAttribute('data-auto'))return parseFloat(r.value);}}return null;}
+function setParamValue(n,v){var rows=document.querySelectorAll('.parameter-row');for(var i=0;i<rows.length;i++){var s=rows[i].querySelector('.param-name');if(s&&s.value.toUpperCase()===n.toUpperCase()){var r=rows[i].querySelector('.param-result');if(r){r.value=v.toFixed(2);r.classList.add('bg-blue-50','border-blue-300');r.setAttribute('data-auto','true');r.setAttribute('readonly','readonly');r.title='Auto-calculated';onParamChange(s);}return;}}}
+function runAutoCalculations(){var sv=getParamValue('SALT');if(sv!==null)setParamValue('%SALT',sv*0.08);var tv=getParamValue('TEMPERATURE'),bv=getParamValue('BRIX');if(tv!==null&&bv!==null)setParamValue('BOSTWICK',(tv*0.013)+(bv*0.08)+2.98);}
+function onResultInput(input){if(input.getAttribute('data-auto')==='true')return;var s=input.closest('.parameter-row').querySelector('.param-name');if(s&&s.value)onParamChange(s);runAutoCalculations();}
+var trendChart=null,allTests=[{% for t in recent_tests %}{id:{{t.id}},batch:"{{t.batch_number}}",formula_id:{{t.formula_id}},formula_code:"{{t.formula.code if t.formula else 'N/A'}}",date:"{{t.test_date.strftime('%Y-%m-%d') if t.test_date else ''}}",status:"{{t.status}}",parameters:{{t.parameters|safe if t.parameters else '[]'}}},{% endfor %}];allTests.reverse();
+var cc=['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#14B8A6','#E11D48','#7C3AED','#0891B2','#D97706','#059669'];
+function buildParamDropdown(){var set=new Set();allTests.forEach(function(t){var p=t.parameters;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){return}}if(p)p.forEach(function(x){if(x.name)set.add(x.name)})});var s=document.getElementById('trendParamFilter');s.innerHTML='<option value="all">All</option>';set.forEach(function(x){s.innerHTML+='<option value="'+x+'">'+x+'</option>'})}
+function updateTrendChart(){var ff=document.getElementById('trendFormulaFilter').value,pf=document.getElementById('trendParamFilter').value,ft=allTests;if(ff!=='all')ft=ft.filter(function(t){return t.formula_id==ff});var ds={};ft.forEach(function(t,i){var p=t.parameters;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){return}}if(!p)return;p.forEach(function(x){if(!x.name)return;if(pf!=='all'&&x.name!==pf)return;var v=parseFloat(x.result);if(isNaN(v))return;if(!ds[x.name]){ds[x.name]={label:x.name+(x.unit?' ('+x.unit+')':''),data:[],borderColor:cc[Object.keys(ds).length%cc.length],backgroundColor:cc[Object.keys(ds).length%cc.length]+'20',borderWidth:2,tension:0.3,fill:false,pointRadius:4,pointHoverRadius:6}}while(ds[x.name].data.length<i)ds[x.name].data.push(null);ds[x.name].data.push(v)})});var labels=ft.map(function(t){return t.batch});if(trendChart)trendChart.destroy();var ctx=document.getElementById('trendChart').getContext('2d'),arr=Object.values(ds);if(arr.length===0){ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);return}trendChart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:arr},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:20,font:{size:11}}}},scales:{x:{title:{display:true,text:'Batch',font:{size:11}},ticks:{maxRotation:45,font:{size:10}}},y:{title:{display:true,text:'Result',font:{size:11}},beginAtZero:false,ticks:{font:{size:10}}}}}})}
+document.getElementById('worksheetModal').addEventListener('click',function(e){if(e.target===this)closeWorksheet()});
+document.addEventListener('DOMContentLoaded',function(){updateLiveClock();setInterval(updateLiveClock,1000);buildParamDropdown();if(allTests.length>0)updateTrendChart()});
 </script>
 {% endblock %}

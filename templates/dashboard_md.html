@@ -1,108 +1,37 @@
 {% extends "base.html" %}
-{% block content %}
 {% block breadcrumb %}
 <span class="text-gray-300">›</span> <span class="text-gray-600">Executive Dashboard</span>
 {% endblock %}
+{% block content %}
 
-<!-- Page Header -->
 <div class="flex justify-between items-center mb-6">
-    <div>
-        <h1 class="text-2xl font-bold text-gray-800">📊 Executive Dashboard</h1>
-        <p class="text-sm text-gray-500">High-level overview · Read-only · All departments</p>
-    </div>
+    <div><h1 class="text-2xl font-bold text-gray-800">📊 Executive Dashboard</h1><p class="text-sm text-gray-500">High-level overview · Read-only · All departments</p></div>
     <span class="text-xs text-gray-400">Auto-refreshes on login</span>
 </div>
 
-<!-- TOP KPI ROW -->
+<!-- KPI Row -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow p-5">
-        <p class="text-blue-100 text-sm">Active Formulas</p>
-        <p class="text-3xl font-bold">{{ approved_formulas }}</p>
-        <p class="text-blue-200 text-xs mt-1">out of {{ total_formulas }} total</p>
-    </div>
-    <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow p-5">
-        <p class="text-green-100 text-sm">QC Pass Rate</p>
-        <p class="text-3xl font-bold">{{ qc_pass_rate }}%</p>
-        <p class="text-green-200 text-xs mt-1">{{ total_qc_tests }} total tests</p>
-    </div>
-    <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow p-5">
-        <p class="text-purple-100 text-sm">Production Efficiency</p>
-        <p class="text-3xl font-bold">{{ production_efficiency }}%</p>
-        <p class="text-purple-200 text-xs mt-1">{{ completed_batches }}/{{ total_batches }} batches</p>
-    </div>
-    <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow p-5">
-        <p class="text-orange-100 text-sm">Inventory Value</p>
-        <p class="text-3xl font-bold">${{ total_inventory_value|round(0)|int }}</p>
-        <p class="text-orange-200 text-xs mt-1">{{ low_stock_count }} items low stock</p>
-    </div>
+    <div class="bg-gradient-to-br from-blue-500 to-blue-600 text-white rounded-lg shadow p-5"><p class="text-blue-100 text-sm">Active Formulas</p><p class="text-3xl font-bold">{{ approved_formulas }}</p><p class="text-blue-200 text-xs mt-1">out of {{ total_formulas }} total</p></div>
+    <div class="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-lg shadow p-5"><p class="text-green-100 text-sm">QC Pass Rate</p><p class="text-3xl font-bold">{{ qc_pass_rate }}%</p><p class="text-green-200 text-xs mt-1">{{ total_qc_tests }} total tests</p></div>
+    <div class="bg-gradient-to-br from-purple-500 to-purple-600 text-white rounded-lg shadow p-5"><p class="text-purple-100 text-sm">Production Efficiency</p><p class="text-3xl font-bold">{{ production_efficiency }}%</p><p class="text-purple-200 text-xs mt-1">{{ completed_batches }}/{{ total_batches }} batches</p></div>
+    <div class="bg-gradient-to-br from-orange-500 to-orange-600 text-white rounded-lg shadow p-5"><p class="text-orange-100 text-sm">Inventory Value</p><p class="text-3xl font-bold">${{ total_inventory_value|round|int }}</p><p class="text-orange-200 text-xs mt-1">{{ low_stock_count }} items low stock</p></div>
 </div>
 
-<!-- PENDING APPROVALS SECTION -->
+<!-- Pending Approvals -->
 {% if pending_formulas %}
 <div class="bg-white rounded-lg shadow p-6 mb-6 border-l-4 border-yellow-400">
-    <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-bold flex items-center gap-2">
-            <span class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></span>
-            📋 Pending Formula Approvals
-            <span class="text-sm font-normal text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">{{ pending_formulas|length }}</span>
-        </h2>
-    </div>
-    
+    <h2 class="text-lg font-bold flex items-center gap-2 mb-4"><span class="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></span>📋 Pending Formula Approvals <span class="text-sm font-normal text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">{{ pending_formulas|length }}</span></h2>
     <div class="space-y-3">
         {% for formula in pending_formulas %}
         <div class="border border-yellow-200 rounded-lg p-4 bg-yellow-50">
-            <div class="flex justify-between items-start mb-3">
-                <div>
-                    <span class="font-bold text-lg">{{ formula.code }}</span>
-                    <span class="text-gray-600 ml-2">{{ formula.name }}</span>
-                    <span class="text-xs text-gray-400 ml-1">v{{ formula.version }}</span>
-                </div>
-                <span class="text-xs px-2 py-1 rounded font-medium bg-yellow-200 text-yellow-800">
-                    PENDING APPROVAL
-                </span>
-            </div>
-            
-            <!-- Ingredients -->
+            <div class="flex justify-between items-start mb-3"><div><span class="font-bold text-lg">{{ formula.code }}</span><span class="text-gray-600 ml-2">{{ formula.name }}</span><span class="text-xs text-gray-400 ml-1">v{{ formula.version }}</span></div><span class="text-xs px-2 py-1 rounded font-medium bg-yellow-200 text-yellow-800">PENDING APPROVAL</span></div>
             {% if formula.ingredients %}
-            <table class="w-full text-sm mb-3">
-                <thead class="text-left text-gray-500">
-                    <tr>
-                        <th class="pb-1">Material</th>
-                        <th class="pb-1 text-right">Quantity</th>
-                        <th class="pb-1">Unit</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for ing in formula.ingredients %}
-                    <tr class="border-t">
-                        <td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td>
-                        <td class="py-1 text-right">{{ ing.quantity }}</td>
-                        <td class="py-1 text-gray-500">{{ ing.unit }}</td>
-                    </tr>
-                    {% endfor %}
-                    <tr class="border-t font-semibold">
-                        <td class="py-2">Batch Total</td>
-                        <td class="py-2 text-right">{{ "%.2f"|format(formula.batch_size) }}</td>
-                        <td class="py-2 text-gray-500">kg</td>
-                    </tr>
-                </tbody>
-            </table>
-            {% else %}
-            <p class="text-sm text-gray-400 mb-3">No ingredients</p>
+            <table class="w-full text-sm mb-3"><thead class="text-left text-gray-500"><tr><th class="pb-1">Material</th><th class="pb-1 text-right">Quantity</th><th class="pb-1">Unit</th></tr></thead><tbody>{% for ing in formula.ingredients %}<tr class="border-t"><td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td><td class="py-1 text-right">{{ ing.quantity }}</td><td class="py-1 text-gray-500">{{ ing.unit }}</td></tr>{% endfor %}<tr class="border-t font-semibold"><td class="py-2">Batch Total</td><td class="py-2 text-right">{{ "%.2f"|format(formula.batch_size) }}</td><td class="py-2 text-gray-500">kg</td></tr></tbody></table>
             {% endif %}
-            
-            <div class="text-xs text-gray-500 mb-3">
-                Submitted by: <span class="font-medium">{{ formula.created_by }}</span> on {{ formula.created_at.strftime('%d-%b-%Y %H:%M') }}
-            </div>
-            
-            <!-- Approve / Reject Buttons -->
+            <div class="text-xs text-gray-500 mb-3">Submitted by: <span class="font-medium">{{ formula.created_by }}</span> on {{ formula.created_at.strftime('%d-%b-%Y %H:%M') }}</div>
             <div class="flex gap-2 pt-2 border-t border-yellow-200">
-                <form method="POST" action="{{ url_for('approve_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Approve this formula? This will make it active for production.')">
-                    <button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-semibold text-sm">✅ APPROVE</button>
-                </form>
-                <form method="POST" action="{{ url_for('reject_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Reject this formula? It will be returned to draft.')">
-                     <button type="submit" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 font-semibold text-sm">❌ REJECT</button>
-                </form>
+                <form method="POST" action="{{ url_for('approve_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Approve this formula?')"><button type="submit" class="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 font-semibold text-sm">✅ APPROVE</button></form>
+                <form method="POST" action="{{ url_for('reject_formula', formula_id=formula.id) }}" class="flex-1" onsubmit="return confirm('Reject this formula?')"><button type="submit" class="w-full bg-red-500 text-white py-2 rounded hover:bg-red-600 font-semibold text-sm">❌ REJECT</button></form>
             </div>
         </div>
         {% endfor %}
@@ -110,258 +39,54 @@
 </div>
 {% endif %}
 
-<!-- MONTHLY TREND + DEPARTMENT ACTIVITY -->
+<!-- Monthly + Department -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    
-    <!-- Monthly QC Trend -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-bold mb-4">📈 Monthly QC Performance</h2>
-        
-        <div class="grid grid-cols-3 gap-4 mb-4">
-            <div class="text-center bg-gray-50 rounded-lg p-3">
-                <p class="text-2xl font-bold text-blue-600">{{ monthly_qc_count }}</p>
-                <p class="text-xs text-gray-500">Total Tests</p>
-            </div>
-            <div class="text-center bg-green-50 rounded-lg p-3">
-                <p class="text-2xl font-bold text-green-600">{{ monthly_pass }}</p>
-                <p class="text-xs text-gray-500">Passed</p>
-            </div>
-            <div class="text-center bg-red-50 rounded-lg p-3">
-                <p class="text-2xl font-bold text-red-600">{{ monthly_fail }}</p>
-                <p class="text-xs text-gray-500">Failed</p>
-            </div>
-        </div>
-        
-        {% if monthly_qc_count > 0 %}
-            {% set pass_pct = (monthly_pass / monthly_qc_count * 100) | int %}
-            {% set fail_pct = (monthly_fail / monthly_qc_count * 100) | int %}
-        {% else %}
-            {% set pass_pct = 0 %}
-            {% set fail_pct = 0 %}
-        {% endif %}
-        
-        <div class="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">
-            {% if pass_pct >= 95 %}
-                <div class="bg-green-500 h-4 rounded-full w-full"></div>
-            {% elif pass_pct >= 90 %}
-                <div class="bg-green-500 h-4 rounded-full w-11/12"></div>
-            {% elif pass_pct >= 80 %}
-                <div class="bg-green-500 h-4 rounded-full w-4/5"></div>
-            {% elif pass_pct >= 75 %}
-                <div class="bg-green-500 h-4 rounded-full w-3/4"></div>
-            {% elif pass_pct >= 66 %}
-                <div class="bg-green-500 h-4 rounded-full w-2/3"></div>
-            {% elif pass_pct >= 50 %}
-                <div class="bg-green-500 h-4 rounded-full w-1/2"></div>
-            {% elif pass_pct >= 33 %}
-                <div class="bg-green-500 h-4 rounded-full w-1/3"></div>
-            {% elif pass_pct >= 25 %}
-                <div class="bg-green-500 h-4 rounded-full w-1/4"></div>
-            {% elif pass_pct >= 10 %}
-                <div class="bg-green-500 h-4 rounded-full w-1/12"></div>
-            {% else %}
-                <div class="bg-green-500 h-4 rounded-full w-1"></div>
-            {% endif %}
-        </div>
-        <div class="flex justify-between text-xs text-gray-500">
-            <span>Pass: {{ pass_pct }}%</span>
-            <span>This Month</span>
-            <span>Fail: {{ fail_pct }}%</span>
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="md-monthly"><span class="collapse-icon text-gray-400">▼</span><h2 class="text-lg font-bold">📈 Monthly QC Performance</h2></div>
+        <div class="section-content">
+            <div class="grid grid-cols-3 gap-4 mb-4"><div class="text-center bg-gray-50 rounded-lg p-3"><p class="text-2xl font-bold text-blue-600">{{ monthly_qc_count }}</p><p class="text-xs text-gray-500">Total Tests</p></div><div class="text-center bg-green-50 rounded-lg p-3"><p class="text-2xl font-bold text-green-600">{{ monthly_pass }}</p><p class="text-xs text-gray-500">Passed</p></div><div class="text-center bg-red-50 rounded-lg p-3"><p class="text-2xl font-bold text-red-600">{{ monthly_fail }}</p><p class="text-xs text-gray-500">Failed</p></div></div>
+            {% if monthly_qc_count>0 %}{% set pp=(monthly_pass/monthly_qc_count*100)|int %}{% else %}{% set pp=0 %}{% endif %}
+            <div class="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">{% if pp>=95 %}<div class="bg-green-500 h-4 w-full"></div>{% elif pp>=90 %}<div class="bg-green-500 h-4 w-11/12"></div>{% elif pp>=80 %}<div class="bg-green-500 h-4 w-4/5"></div>{% elif pp>=75 %}<div class="bg-green-500 h-4 w-3/4"></div>{% elif pp>=66 %}<div class="bg-green-500 h-4 w-2/3"></div>{% elif pp>=50 %}<div class="bg-green-500 h-4 w-1/2"></div>{% elif pp>=33 %}<div class="bg-green-500 h-4 w-1/3"></div>{% elif pp>=25 %}<div class="bg-green-500 h-4 w-1/4"></div>{% else %}<div class="bg-green-500 h-4 w-1/12"></div>{% endif %}</div>
+            <div class="flex justify-between text-xs text-gray-500"><span>Pass: {{ pp }}%</span><span>This Month</span><span>Fail: {% if monthly_qc_count>0 %}{{ (monthly_fail/monthly_qc_count*100)|int }}{% else %}0{% endif %}%</span></div>
         </div>
     </div>
     
-    <!-- Department Activity -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-bold mb-4">🏢 Department Activity</h2>
-        
-        <div class="space-y-3">
-            {% for dept, count in dept_activity.items() %}
-                {% set bar_pct = (count / 5 * 100) | int %}
-                {% if bar_pct > 100 %}{% set bar_pct = 100 %}{% endif %}
-            <div class="flex justify-between items-center">
-                <span class="text-sm font-medium text-gray-700">{{ dept }}</span>
-                <div class="flex items-center gap-2">
-                    <div class="w-32 bg-gray-200 rounded-full h-2 overflow-hidden">
-                        {% if bar_pct >= 100 %}
-                            <div class="bg-blue-500 h-2 w-full"></div>
-                        {% elif bar_pct >= 80 %}
-                            <div class="bg-blue-500 h-2 w-4/5"></div>
-                        {% elif bar_pct >= 60 %}
-                            <div class="bg-blue-500 h-2 w-3/5"></div>
-                        {% elif bar_pct >= 40 %}
-                            <div class="bg-blue-500 h-2 w-2/5"></div>
-                        {% elif bar_pct >= 20 %}
-                            <div class="bg-blue-500 h-2 w-1/5"></div>
-                        {% else %}
-                            <div class="bg-blue-500 h-2 w-2"></div>
-                        {% endif %}
-                    </div>
-                    <span class="text-sm font-bold text-gray-600 w-8 text-right">{{ count }}</span>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        
-        <div class="mt-4 pt-4 border-t">
-            <h3 class="font-semibold text-sm text-gray-700 mb-2">📋 Summary</h3>
-            <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
-                <div>• {{ total_formulas }} formulas</div>
-                <div>• {{ total_materials }} raw materials</div>
-                <div>• {{ total_qc_tests }} QC tests</div>
-                <div>• {{ total_batches }} batches</div>
-                <div>• {{ total_produced|round(0)|int }} kg produced</div>
-                <div>• ${{ total_inventory_value|round(0)|int }} inventory</div>
-            </div>
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="md-dept"><span class="collapse-icon text-gray-400">▼</span><h2 class="text-lg font-bold">🏢 Department Activity</h2></div>
+        <div class="section-content">
+            <div class="space-y-3">{% for dept, count in dept_activity.items() %}{% set bp=(count/5*100)|int %}{% if bp>100 %}{% set bp=100 %}{% endif %}<div class="flex justify-between items-center"><span class="text-sm font-medium text-gray-700">{{ dept }}</span><div class="flex items-center gap-2"><div class="w-32 bg-gray-200 rounded-full h-2 overflow-hidden">{% if bp>=100 %}<div class="bg-blue-500 h-2 w-full"></div>{% elif bp>=80 %}<div class="bg-blue-500 h-2 w-4/5"></div>{% elif bp>=60 %}<div class="bg-blue-500 h-2 w-3/5"></div>{% elif bp>=40 %}<div class="bg-blue-500 h-2 w-2/5"></div>{% elif bp>=20 %}<div class="bg-blue-500 h-2 w-1/5"></div>{% else %}<div class="bg-blue-500 h-2 w-2"></div>{% endif %}</div><span class="text-sm font-bold text-gray-600 w-8 text-right">{{ count }}</span></div></div>{% endfor %}</div>
+            <div class="mt-4 pt-4 border-t"><h3 class="font-semibold text-sm text-gray-700 mb-2">📋 Summary</h3><div class="grid grid-cols-2 gap-2 text-xs text-gray-600"><div>• {{ total_formulas }} formulas</div><div>• {{ total_materials }} raw materials</div><div>• {{ total_qc_tests }} QC tests</div><div>• {{ total_batches }} batches</div><div>• {{ total_produced|round|int }} kg produced</div><div>• ${{ total_inventory_value|round|int }} inventory</div></div></div>
         </div>
     </div>
 </div>
 
-<!-- RECENT ACTIVITY FEED -->
+<!-- Recent Activity -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    
-    <!-- Recent QC Activity -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-bold mb-4">🔬 Recent QC Activity</h2>
-        
-        {% if recent_qc %}
-        <div class="space-y-2">
-            {% for test in recent_qc %}
-            <div class="flex justify-between items-center border-b pb-2">
-                <div>
-                    <span class="font-medium text-sm">{{ test.batch_number }}</span>
-                    <span class="text-gray-400 text-xs ml-2">
-                        {{ test.formula.code if test.formula else 'N/A' }}
-                    </span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-400">{{ test.test_date.strftime('%d-%b') if test.test_date else '' }}</span>
-                    <span class="text-xs px-2 py-0.5 rounded
-                        {% if test.status == 'pass' %}bg-green-100 text-green-700
-                        {% elif test.status == 'fail' %}bg-red-100 text-red-700
-                        {% else %}bg-yellow-100 text-yellow-700{% endif %}">
-                        {{ test.status.upper() }}
-                    </span>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-gray-400 text-center py-4">No QC activity</p>
-        {% endif %}
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="md-qc-recent"><span class="collapse-icon text-gray-400">▼</span><h2 class="text-lg font-bold">🔬 Recent QC Activity</h2></div>
+        <div class="section-content">{% if recent_qc %}<div class="space-y-2">{% for test in recent_qc %}<div class="flex justify-between items-center border-b pb-2"><div><span class="font-medium text-sm">{{ test.batch_number }}</span><span class="text-gray-400 text-xs ml-2">{{ test.formula.code if test.formula else 'N/A' }}</span></div><div class="flex items-center gap-2"><span class="text-xs text-gray-400">{{ test.test_date.strftime('%d-%b') if test.test_date else '' }}</span><span class="text-xs px-2 py-0.5 rounded {% if test.status=='pass' %}bg-green-100 text-green-700{% elif test.status=='fail' %}bg-red-100 text-red-700{% else %}bg-yellow-100 text-yellow-700{% endif %}">{{ test.status.upper() }}</span></div></div>{% endfor %}</div>{% else %}<p class="text-gray-400 text-center py-4">No QC activity</p>{% endif %}</div>
     </div>
-    
-    <!-- Recent Production Activity -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-bold mb-4">🏭 Recent Production Activity</h2>
-        
-        {% if recent_production %}
-        <div class="space-y-2">
-            {% for batch in recent_production %}
-            <div class="flex justify-between items-center border-b pb-2">
-                <div>
-                    <span class="font-medium text-sm">{{ batch.batch_number }}</span>
-                    <span class="text-gray-400 text-xs ml-2">
-                        {{ batch.formula.code if batch.formula else 'N/A' }}
-                    </span>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs text-gray-400">
-                        {{ (batch.quantity_produced or 0)|round(0)|int }} kg
-                    </span>
-                    <span class="text-xs px-2 py-0.5 rounded
-                        {% if batch.status == 'completed' %}bg-green-100 text-green-700
-                        {% elif batch.status == 'in_progress' %}bg-yellow-100 text-yellow-700
-                        {% else %}bg-blue-100 text-blue-700{% endif %}">
-                        {{ batch.status|upper|replace('_', ' ') }}
-                    </span>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-gray-400 text-center py-4">No production activity</p>
-        {% endif %}
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="md-prod-recent"><span class="collapse-icon text-gray-400">▼</span><h2 class="text-lg font-bold">🏭 Recent Production Activity</h2></div>
+        <div class="section-content">{% if recent_production %}<div class="space-y-2">{% for batch in recent_production %}<div class="flex justify-between items-center border-b pb-2"><div><span class="font-medium text-sm">{{ batch.batch_number }}</span><span class="text-gray-400 text-xs ml-2">{{ batch.formula.code if batch.formula else 'N/A' }}</span></div><div class="flex items-center gap-2"><span class="text-xs text-gray-400">{{ (batch.quantity_produced or 0)|round|int }} kg</span><span class="text-xs px-2 py-0.5 rounded {% if batch.status=='completed' %}bg-green-100 text-green-700{% elif batch.status=='in_progress' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">{{ batch.status.upper().replace('_',' ') }}</span></div></div>{% endfor %}</div>{% else %}<p class="text-gray-400 text-center py-4">No production activity</p>{% endif %}</div>
     </div>
 </div>
 
-<!-- BOTTOM: Alerts & Quick Actions -->
+<!-- Alerts & Summary -->
 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-    
-    <!-- Critical Alerts -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-bold mb-4">⚠️ Alerts</h2>
-        
-        {% if low_stock_count > 0 or failed_tests > 0 or pending_approvals > 0 %}
-        <div class="space-y-2">
-            {% if pending_approvals > 0 %}
-            <div class="bg-yellow-50 border border-yellow-200 rounded p-3">
-                <p class="text-yellow-800 font-medium text-sm">📋 Pending Approvals</p>
-                <p class="text-yellow-600 text-xs">{{ pending_approvals }} formula(s) awaiting your review</p>
-            </div>
-            {% endif %}
-            {% if low_stock_count > 0 %}
-            <div class="bg-red-50 border border-red-200 rounded p-3">
-                <p class="text-red-800 font-medium text-sm">📦 Low Stock Alert</p>
-                <p class="text-red-600 text-xs">{{ low_stock_count }} materials below minimum</p>
-            </div>
-            {% endif %}
-            {% if failed_tests > 0 %}
-            <div class="bg-yellow-50 border border-yellow-200 rounded p-3">
-                <p class="text-yellow-800 font-medium text-sm">🔬 QC Failures</p>
-                <p class="text-yellow-600 text-xs">{{ failed_tests }} failed tests need review</p>
-            </div>
-            {% endif %}
-        </div>
-        {% else %}
-        <div class="text-center py-6">
-            <p class="text-green-500 text-3xl mb-1">✅</p>
-            <p class="text-green-700 font-medium text-sm">All systems normal</p>
-        </div>
-        {% endif %}
+        {% if low_stock_count>0 or failed_tests>0 or pending_approvals>0 %}
+        <div class="space-y-2">{% if pending_approvals>0 %}<div class="bg-yellow-50 border border-yellow-200 rounded p-3"><p class="text-yellow-800 font-medium text-sm">📋 Pending Approvals</p><p class="text-yellow-600 text-xs">{{ pending_approvals }} formula(s) awaiting your review</p></div>{% endif %}{% if low_stock_count>0 %}<div class="bg-red-50 border border-red-200 rounded p-3"><p class="text-red-800 font-medium text-sm">📦 Low Stock Alert</p><p class="text-red-600 text-xs">{{ low_stock_count }} materials below minimum</p></div>{% endif %}{% if failed_tests>0 %}<div class="bg-yellow-50 border border-yellow-200 rounded p-3"><p class="text-yellow-800 font-medium text-sm">🔬 QC Failures</p><p class="text-yellow-600 text-xs">{{ failed_tests }} failed tests need review</p></div>{% endif %}</div>
+        {% else %}<div class="text-center py-6"><p class="text-green-500 text-3xl mb-1">✅</p><p class="text-green-700 font-medium text-sm">All systems normal</p></div>{% endif %}
     </div>
-    
-    <!-- Production Summary -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-bold mb-4">📊 Production Summary</h2>
-        <div class="space-y-3 text-sm">
-            <div class="flex justify-between">
-                <span class="text-gray-600">Total Planned</span>
-                <span class="font-bold">{{ total_planned|round(0)|int }} kg</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Total Produced</span>
-                <span class="font-bold text-green-600">{{ total_produced|round(0)|int }} kg</span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Efficiency</span>
-                <span class="font-bold 
-                    {% if production_efficiency >= 90 %}text-green-600
-                    {% elif production_efficiency >= 75 %}text-yellow-600
-                    {% else %}text-red-600{% endif %}">
-                    {{ production_efficiency }}%
-                </span>
-            </div>
-            <div class="flex justify-between">
-                <span class="text-gray-600">Completed Batches</span>
-                <span class="font-bold">{{ completed_batches }}/{{ total_batches }}</span>
-            </div>
-        </div>
+        <div class="space-y-3 text-sm"><div class="flex justify-between"><span class="text-gray-600">Total Planned</span><span class="font-bold">{{ total_planned|round|int }} kg</span></div><div class="flex justify-between"><span class="text-gray-600">Total Produced</span><span class="font-bold text-green-600">{{ total_produced|round|int }} kg</span></div><div class="flex justify-between"><span class="text-gray-600">Efficiency</span><span class="font-bold {% if production_efficiency>=90 %}text-green-600{% elif production_efficiency>=75 %}text-yellow-600{% else %}text-red-600{% endif %}">{{ production_efficiency }}%</span></div><div class="flex justify-between"><span class="text-gray-600">Completed Batches</span><span class="font-bold">{{ completed_batches }}/{{ total_batches }}</span></div></div>
     </div>
-    
-    <!-- Data Access Note -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-lg font-bold mb-4">🔒 Access Level</h2>
-        <div class="bg-blue-50 rounded-lg p-4">
-            <p class="text-blue-800 font-semibold text-sm mb-2">👑 Executive Access</p>
-            <ul class="text-xs text-blue-700 space-y-1">
-                <li>✅ View all aggregated data</li>
-                <li>✅ See all department metrics</li>
-                <li>✅ Review and approve formulas</li>
-                <li>✅ View full formula details</li>
-                <li>❌ No data modification (except approvals)</li>
-            </ul>
-        </div>
+        <div class="bg-blue-50 rounded-lg p-4"><p class="text-blue-800 font-semibold text-sm mb-2">👑 Executive Access</p><ul class="text-xs text-blue-700 space-y-1"><li>✅ View all aggregated data</li><li>✅ See all department metrics</li><li>✅ Review and approve formulas</li><li>✅ View full formula details</li><li>❌ No data modification (except approvals)</li></ul></div>
     </div>
 </div>
-
 {% endblock %}

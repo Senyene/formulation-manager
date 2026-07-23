@@ -1,597 +1,206 @@
 {% extends "base.html" %}
-{% block content %}
 {% block breadcrumb %}
 <span class="text-gray-300">›</span> <span class="text-gray-600">R&D Lab</span>
 {% endblock %}
+{% block content %}
 
-{% with messages = get_flashed_messages() %}
+{% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-            {{ messages[0] }}
+        {% for category, message in messages %}
+        <div class="{% if category == 'error' %}bg-red-100 border-red-400 text-red-700{% elif category == 'warning' %}bg-yellow-100 border-yellow-400 text-yellow-700{% else %}bg-green-100 border-green-400 text-green-700{% endif %} border px-4 py-3 rounded mb-4 toast-enter">
+            {{ message }}
         </div>
+        {% endfor %}
     {% endif %}
 {% endwith %}
 
 <!-- TOP ROW: Create Formula + QC Feed -->
 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-    
-    <!-- Create New Formula -->
     <div class="bg-white rounded-lg shadow p-6">
         <h2 class="text-xl font-bold mb-4">🧬 Create New Formula</h2>
         <form method="POST" action="{{ url_for('create_formula') }}">
-            <div class="mb-3">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Formula Code *</label>
-                <input type="text" name="code" required placeholder="e.g., F-102"
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-            </div>
-            <div class="mb-3">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Formula Name *</label>
-                <input type="text" name="name" required placeholder="e.g., High-Gloss Clear Coat"
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-            </div>
-            <div class="mb-3">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Version</label>
-                <input type="text" name="version" value="1.0"
-                       class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500">
-            </div>
-            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold">
-                + Create Formula
-            </button>
+            <div class="mb-3"><label class="block text-sm font-medium text-gray-700 mb-1">Formula Code *</label><input type="text" name="code" required placeholder="e.g., F-102" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></div>
+            <div class="mb-3"><label class="block text-sm font-medium text-gray-700 mb-1">Formula Name *</label><input type="text" name="name" required placeholder="e.g., High-Gloss Clear Coat" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></div>
+            <div class="mb-3"><label class="block text-sm font-medium text-gray-700 mb-1">Version</label><input type="text" name="version" value="1.0" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></div>
+            <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">+ Create Formula</span></button>
         </form>
     </div>
     
-    <!-- QC Results Feed -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-xl font-bold mb-4">🔬 QC Results Feed</h2>
-        {% if qc_feed %}
-        <div class="space-y-3 max-h-80 overflow-y-auto">
-            {% for test in qc_feed %}
-            <div class="border rounded p-3 {% if test.status == 'fail' %}border-red-200 bg-red-50{% else %}border-gray-200{% endif %}">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <span class="font-semibold">{{ test.formula.code if test.formula else 'N/A' }}</span>
-                        <span class="text-gray-500 text-sm">Batch: {{ test.batch_number }}</span>
-                    </div>
-                    <span class="text-xs px-2 py-1 rounded font-medium
-                        {% if test.status == 'pass' %}bg-green-100 text-green-800
-                        {% elif test.status == 'fail' %}bg-red-100 text-red-800
-                        {% else %}bg-yellow-100 text-yellow-800{% endif %}">
-                        {{ test.status.upper() }}
-                    </span>
-                </div>
-                <div class="text-xs text-gray-500 mt-1">
-                    {{ test.test_date.strftime('%d-%b-%Y') if test.test_date else '' }} | Tester: {{ test.tested_by }}
-                </div>
-                {% if test.notes %}
-                <div class="text-xs text-gray-600 mt-1 italic">📝 {{ test.notes }}</div>
-                {% endif %}
-            </div>
-            {% endfor %}
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="rd-qc-feed">
+            <span class="collapse-icon text-gray-400">▼</span>
+            <h2 class="text-xl font-bold">🔬 QC Results Feed</h2>
         </div>
-        {% else %}
-        <div class="text-center py-8 text-gray-400">
-            <p class="text-4xl mb-2">📭</p>
-            <p>No QC results yet</p>
-        </div>
-        {% endif %}
-    </div>
-</div>
-
-<!-- QC PARAMETER TRENDS CHART -->
-<div class="bg-white rounded-lg shadow p-6 mb-6">
-    <div class="flex justify-between items-center mb-4">
-        <h2 class="text-xl font-bold">📈 QC Parameter Trends</h2>
-        <div class="flex gap-2">
-            <select id="trendFormulaFilter" onchange="updateTrendChart()" 
-                    class="px-3 py-1 border border-gray-300 rounded text-sm">
-                <option value="all">All Formulas</option>
-                {% for formula in formulas %}
-                <option value="{{ formula.id }}">{{ formula.code }}</option>
+        <div class="section-content">
+            {% if qc_feed %}
+            <div class="space-y-3 max-h-80 overflow-y-auto">
+                {% for test in qc_feed %}
+                <div class="border rounded p-3 {% if test.status == 'fail' %}border-red-200 bg-red-50{% endif %}">
+                    <div class="flex justify-between items-start"><div><span class="font-semibold">{{ test.formula.code if test.formula else 'N/A' }}</span><span class="text-gray-500 text-sm">Batch: {{ test.batch_number }}</span></div><span class="text-xs px-2 py-1 rounded font-medium {% if test.status == 'pass' %}bg-green-100 text-green-800{% elif test.status == 'fail' %}bg-red-100 text-red-800{% else %}bg-yellow-100 text-yellow-800{% endif %}">{{ test.status.upper() }}</span></div>
+                    <div class="text-xs text-gray-500 mt-1">{{ test.test_date.strftime('%d-%b-%Y') if test.test_date else '' }} | Tester: {{ test.tested_by }}</div>
+                    {% if test.notes %}<div class="text-xs text-gray-600 mt-1 italic">📝 {{ test.notes }}</div>{% endif %}
+                </div>
                 {% endfor %}
-            </select>
-            <select id="trendParamFilter" onchange="updateTrendChart()" 
-                    class="px-3 py-1 border border-gray-300 rounded text-sm">
-                <option value="all">All Parameters</option>
-            </select>
+            </div>
+            {% else %}<div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">📭</p><p>No QC results yet</p></div>{% endif %}
         </div>
-    </div>
-    
-    <div class="relative" style="height: 350px;">
-        <canvas id="trendChart"></canvas>
     </div>
 </div>
 
-<!-- BOTTOM ROW: Formula Detail + Raw Materials -->
-<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    
-    <!-- Formula Management -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-xl font-bold">📋 My Formulas</h2>
-            <a href="{{ url_for('export_formulas') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print">📥 Export CSV</a>
+<!-- QC TRENDS CHART -->
+<div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section">
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="rd-trends">
+        <span class="collapse-icon text-gray-400">▼</span>
+        <div class="flex justify-between items-center flex-1">
+            <h2 class="text-xl font-bold">📈 QC Parameter Trends</h2>
+            <div class="flex gap-2 no-print" onclick="event.stopPropagation()">
+                <select id="trendFormulaFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
+                    <option value="all">All Formulas</option>
+                    {% for formula in formulas %}<option value="{{ formula.id }}">{{ formula.code }}</option>{% endfor %}
+                </select>
+                <select id="trendParamFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
+                    <option value="all">All Parameters</option>
+                </select>
+            </div>
         </div>
-        
-        {% if formulas %}
-        <div class="space-y-4">
-            {% for formula in formulas %}
-            <div class="border rounded-lg p-4 {% if formula.status == 'approved' %}border-green-300 bg-green-50{% elif formula.status == 'pending_approval' %}border-yellow-300 bg-yellow-50{% elif formula.status == 'archived' %}border-gray-300 bg-gray-50{% else %}border-blue-200{% endif %}">
-                <div class="flex justify-between items-start mb-3">
-                    <div>
-                        <span class="font-bold text-lg">{{ formula.code }}</span>
-                        <span class="text-gray-600">- {{ formula.name }}</span>
-                        <span class="text-xs text-gray-400">v{{ formula.version }}</span>
+    </div>
+    <div class="section-content"><div class="relative" style="height: 350px;"><canvas id="trendChart"></canvas></div></div>
+</div>
+
+<!-- BOTTOM ROW -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Formula Management -->
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="rd-formulas">
+            <span class="collapse-icon text-gray-400">▼</span>
+            <div class="flex justify-between items-center flex-1">
+                <h2 class="text-xl font-bold">📋 My Formulas</h2>
+                <a href="{{ url_for('export_formulas') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print" onclick="event.stopPropagation()">📥 Export CSV</a>
+            </div>
+        </div>
+        <div class="section-content">
+            {% if formulas %}
+            <div class="space-y-4">
+                {% for formula in formulas %}
+                <div class="border rounded-lg p-4 {% if formula.status == 'approved' %}border-green-300 bg-green-50{% elif formula.status == 'pending_approval' %}border-yellow-300 bg-yellow-50{% elif formula.status == 'archived' %}border-gray-300 bg-gray-50{% else %}border-blue-200{% endif %}">
+                    <div class="flex justify-between items-start mb-3">
+                        <div><span class="font-bold text-lg">{{ formula.code }}</span><span class="text-gray-600">- {{ formula.name }}</span><span class="text-xs text-gray-400">v{{ formula.version }}</span></div>
+                        <div class="flex items-center gap-1">
+                            <a href="{{ url_for('export_single_formula', formula_id=formula.id) }}" class="text-gray-400 hover:text-green-500 text-xs no-print" title="Export formula">📥</a>
+                            <span class="text-xs px-2 py-1 rounded font-medium {% if formula.status == 'approved' %}bg-green-200 text-green-800{% elif formula.status == 'pending_approval' %}bg-yellow-200 text-yellow-800{% elif formula.status == 'archived' %}bg-gray-300 text-gray-600{% else %}bg-blue-200 text-blue-800{% endif %}">{{ formula.status.upper().replace('_',' ') }}</span>
+                        </div>
                     </div>
-                    <div class="flex items-center gap-1">
-                        <a href="{{ url_for('export_single_formula', formula_id=formula.id) }}" class="text-gray-400 hover:text-green-500 text-xs no-print" title="Export formula">📥</a>
-                        <span class="text-xs px-2 py-1 rounded font-medium
-                            {% if formula.status == 'approved' %}bg-green-200 text-green-800
-                            {% elif formula.status == 'pending_approval' %}bg-yellow-200 text-yellow-800
-                            {% elif formula.status == 'archived' %}bg-gray-300 text-gray-600
-                            {% else %}bg-blue-200 text-blue-800{% endif %}">
-                            {{ formula.status|upper|replace('_', ' ') }}
-                        </span>
-                    </div>
-                </div>
-                
-                <!-- Ingredients List -->
-                {% if formula.ingredients %}
-                <table class="w-full text-sm mb-3">
-                    <thead class="text-left text-gray-500">
-                        <tr>
-                            <th class="pb-1">Material</th>
-                            <th class="pb-1">Qty</th>
-                            <th class="pb-1">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                    {% if formula.ingredients %}
+                    <table class="w-full text-sm mb-3"><thead class="text-left text-gray-500"><tr><th class="pb-1">Material</th><th class="pb-1">Qty</th><th class="pb-1">Actions</th></tr></thead><tbody>
                         {% for ing in formula.ingredients %}
-                        <tr class="border-t">
-                            <td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td>
-                            <td class="py-1">{{ ing.quantity }} {{ ing.unit }}</td>
-                            <td class="py-1">
-                                {% if formula.status == 'draft' %}
-                                <button onclick="document.getElementById('edit-ing-{{ ing.id }}').classList.toggle('hidden')" 
-                                        class="text-blue-500 text-xs hover:underline">Edit</button>
-                                <form method="POST" action="{{ url_for('remove_ingredient', ingredient_id=ing.id) }}" class="inline">
-                                    <button type="submit" class="text-red-500 text-xs hover:underline ml-2" 
-                                            onclick="return confirm('Remove this ingredient?')">Remove</button>
-                                </form>
-                                {% else %}
-                                <span class="text-gray-400 text-xs">🔒 Locked</span>
-                                {% endif %}
-                            </td>
-                        </tr>
+                        <tr class="border-t"><td class="py-1">{{ ing.material.name if ing.material else 'Unknown' }}</td><td class="py-1">{{ ing.quantity }} {{ ing.unit }}</td><td class="py-1">{% if formula.status == 'draft' %}<button onclick="document.getElementById('edit-ing-{{ ing.id }}').classList.toggle('hidden')" class="text-blue-500 text-xs hover:underline">Edit</button><form method="POST" action="{{ url_for('remove_ingredient', ingredient_id=ing.id) }}" class="inline"><button type="submit" class="text-red-500 text-xs hover:underline ml-2" onclick="return confirm('Remove this ingredient?')">Remove</button></form>{% else %}<span class="text-gray-400 text-xs">🔒 Locked</span>{% endif %}</td></tr>
                         {% if formula.status == 'draft' %}
-                        <tr id="edit-ing-{{ ing.id }}" class="hidden bg-yellow-50 border-t">
-                            <td colspan="3" class="py-2">
-                                <form method="POST" action="{{ url_for('update_ingredient', ingredient_id=ing.id) }}" class="flex gap-2 items-end">
-                                    <div>
-                                        <label class="text-xs text-gray-500">Quantity</label>
-                                        <input type="number" step="0.01" name="quantity" value="{{ ing.quantity }}" 
-                                               class="w-20 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-gray-500">Unit</label>
-                                        <input type="text" name="unit" value="{{ ing.unit }}" 
-                                               class="w-16 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
-                                </form>
-                            </td>
-                        </tr>
+                        <tr id="edit-ing-{{ ing.id }}" class="hidden bg-yellow-50 border-t"><td colspan="3" class="py-2"><form method="POST" action="{{ url_for('update_ingredient', ingredient_id=ing.id) }}" class="flex gap-2 items-end"><div><label class="text-xs text-gray-500">Quantity</label><input type="number" step="0.01" name="quantity" value="{{ ing.quantity }}" class="w-20 px-2 py-1 border rounded text-sm"></div><div><label class="text-xs text-gray-500">Unit</label><input type="text" name="unit" value="{{ ing.unit }}" class="w-16 px-2 py-1 border rounded text-sm"></div><button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button></form></td></tr>
                         {% endif %}
                         {% endfor %}
-                    </tbody>
-                </table>
-                <p class="text-xs text-gray-400 mt-1">Batch Total: {{ "%.2f"|format(formula.batch_size) }} kg</p>
-                {% else %}
-                <p class="text-sm text-gray-400 mb-3">No ingredients added yet</p>
-                {% endif %}
-                
-                <!-- Add Ingredient Form (only for draft) -->
-                {% if formula.status == 'draft' %}
-                <form method="POST" action="{{ url_for('add_ingredient') }}" class="flex gap-2 items-end mt-2 pt-2 border-t">
-                    <input type="hidden" name="formula_id" value="{{ formula.id }}">
-                    <div class="flex-1">
-                        <select name="material_id" required class="w-full px-2 py-1 border rounded text-sm">
-                            <option value="">Select material...</option>
-                            {% for mat in materials %}
-                            <option value="{{ mat.id }}">{{ mat.code }} - {{ mat.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div>
-                        <input type="number" step="0.01" name="quantity" placeholder="Qty" required 
-                               class="w-20 px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <input type="text" name="unit" value="kg" 
-                               class="w-16 px-2 py-1 border rounded text-sm">
-                    </div>
-                    <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ Add</button>
-                </form>
-                {% endif %}
-                
-                <!-- Status Change Buttons -->
-                <div class="flex gap-2 mt-3 pt-2 border-t">
-                    {% if formula.status == 'draft' and formula.ingredients %}
-                    <form method="POST" action="{{ url_for('submit_for_approval', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Submit this formula for MD approval? This cannot be undone.')">
-                        <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📤 Submit for Approval</button>
-                    </form>
-                    {% endif %}
+                    </tbody></table>
+                    <p class="text-xs text-gray-400 mt-1">Batch Total: {{ "%.2f"|format(formula.batch_size) }} kg</p>
+                    {% else %}<p class="text-sm text-gray-400 mb-3">No ingredients added yet</p>{% endif %}
+                    
                     {% if formula.status == 'draft' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to archive this formula?')">
-                        <input type="hidden" name="status" value="archived">
-                        <button type="submit" class="bg-gray-400 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
+                    <form method="POST" action="{{ url_for('add_ingredient') }}" class="flex gap-2 items-end mt-2 pt-2 border-t">
+                        <input type="hidden" name="formula_id" value="{{ formula.id }}">
+                        <div class="flex-1"><select name="material_id" required class="w-full px-2 py-1 border rounded text-sm"><option value="">Select material...</option>{% for mat in materials %}<option value="{{ mat.id }}">{{ mat.code }} - {{ mat.name }}</option>{% endfor %}</select></div>
+                        <div><input type="number" step="0.01" name="quantity" placeholder="Qty" required class="w-20 px-2 py-1 border rounded text-sm"></div>
+                        <div><input type="text" name="unit" value="kg" class="w-16 px-2 py-1 border rounded text-sm"></div>
+                        <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded text-sm">+ Add</button>
                     </form>
                     {% endif %}
-                    {% if formula.status == 'pending_approval' %}
-                    <span class="text-yellow-600 text-xs flex items-center gap-1">⏳ Awaiting MD approval</span>
-                    {% endif %}
-                    {% if formula.status == 'approved' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to archive this formula?')">
-                        <input type="hidden" name="status" value="archived">
-                        <button type="submit" class="bg-gray-500 text-white px-3 py-1 rounded text-xs">📦 Archive</button>
-                    </form>
-                    {% if formula.approved_by %}
-                    <span class="text-green-600 text-xs flex items-center gap-1">✅ Approved by {{ formula.approved_by }}</span>
-                    {% endif %}
-                    {% endif %}
-                    {% if formula.status == 'archived' %}
-                    <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Are you sure you want to reactivate this formula?')">
-                        <input type="hidden" name="status" value="draft">
-                        <button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📝 Reactivate</button>
-                    </form>
-                    {% endif %}
+                    
+                    <div class="flex gap-2 mt-3 pt-2 border-t">
+                        {% if formula.status == 'draft' and formula.ingredients %}
+                        <form method="POST" action="{{ url_for('submit_for_approval', formula_id=formula.id) }}" class="inline" onsubmit="return confirm('Submit this formula for MD approval?')"><button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📤 Submit for Approval</button></form>
+                        {% endif %}
+                        {% if formula.status == 'draft' %}
+                        <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline"><input type="hidden" name="status" value="archived"><button type="submit" class="bg-gray-400 text-white px-3 py-1 rounded text-xs">📦 Archive</button></form>
+                        {% endif %}
+                        {% if formula.status == 'pending_approval' %}<span class="text-yellow-600 text-xs flex items-center gap-1">⏳ Awaiting MD approval</span>{% endif %}
+                        {% if formula.status == 'approved' %}
+                        <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline"><input type="hidden" name="status" value="archived"><button type="submit" class="bg-gray-500 text-white px-3 py-1 rounded text-xs">📦 Archive</button></form>
+                        {% if formula.approved_by %}<span class="text-green-600 text-xs flex items-center gap-1">✅ Approved by {{ formula.approved_by }}</span>{% endif %}
+                        {% endif %}
+                        {% if formula.status == 'archived' %}
+                        <form method="POST" action="{{ url_for('update_formula_status', formula_id=formula.id) }}" class="inline"><input type="hidden" name="status" value="draft"><button type="submit" class="bg-yellow-500 text-white px-3 py-1 rounded text-xs">📝 Reactivate</button></form>
+                        {% endif %}
+                    </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
+            {% else %}<div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">🧪</p><p>No formulas created yet</p></div>{% endif %}
         </div>
-        {% else %}
-        <div class="text-center py-8 text-gray-400">
-            <p class="text-4xl mb-2">🧪</p>
-            <p>No formulas created yet</p>
-        </div>
-        {% endif %}
     </div>
     
-    <!-- Raw Materials Management - COLLAPSIBLE BY CATEGORY -->
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex justify-between items-center mb-4">
-            <div class="flex items-center gap-3">
-                <h2 class="text-xl font-bold">🧱 Raw Materials</h2>
-                <a href="{{ url_for('manage_parameters') }}" 
-                   class="text-xs text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                    </svg>
-                    QC Parameters
-                </a>
-            </div>
-            <button onclick="document.getElementById('newMaterialForm').classList.toggle('hidden')"
-                    class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600">
-                + New Material
-            </button>
-        </div>
-        
-        <div id="newMaterialForm" class="hidden border border-green-200 rounded-lg p-4 mb-4 bg-green-50">
-            <h3 class="font-semibold mb-3 text-green-800">Add New Material</h3>
-            <form method="POST" action="{{ url_for('create_material') }}">
-                <div class="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Code *</label>
-                        <input type="text" name="code" required placeholder="e.g., RM-050"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Name *</label>
-                        <input type="text" name="name" required placeholder="Material name"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Supplier</label>
-                        <input type="text" name="supplier" placeholder="Supplier name"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Unit</label>
-                        <input type="text" name="unit" value="kg"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Cost/Unit</label>
-                        <input type="number" step="0.01" name="cost_per_unit" value="0"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
-                    <div>
-                        <label class="block text-xs text-gray-600 mb-1">Stock Level</label>
-                        <input type="number" step="0.01" name="stock_level" value="0"
-                               class="w-full px-2 py-1 border rounded text-sm">
-                    </div>
+    <!-- Raw Materials -->
+    <div class="bg-white rounded-lg shadow p-6 collapsible-section">
+        <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="rd-materials">
+            <span class="collapse-icon text-gray-400">▼</span>
+            <div class="flex justify-between items-center flex-1">
+                <div class="flex items-center gap-3">
+                    <h2 class="text-xl font-bold">🧱 Raw Materials</h2>
+                    <a href="{{ url_for('manage_parameters') }}" class="text-xs text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-1 no-print" onclick="event.stopPropagation()">⚙️ QC Parameters</a>
                 </div>
-                <button type="submit" class="w-full bg-green-600 text-white py-1 rounded text-sm">Save Material</button>
-            </form>
+                <button onclick="event.stopPropagation(); document.getElementById('newMaterialForm').classList.toggle('hidden')" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print">+ New Material</button>
+            </div>
         </div>
-        
-        {% if materials %}
-        
-        {% set categories = {
-            'Acids & Preservatives': ['Acetic acid', 'Citric acid', 'Potassium sorbate', 'Sodium ascorbate'],
-            'Colours': ['Colour (Erythrosine)', 'Colour (Ponceau 4R)', 'Colour (Sunset Yellow)', 'Colour (Allura Red)', 'Caramel'],
-            'Dairy & Creamers': ['Non-dairy creamer (F28)', 'Non-dairy creamer (A20)'],
-            'Fibres & Starches': ['Soya Fibre', 'Corn starch', 'Maltodextrin', 'CMC (Carboxymethyl cellulose)'],
-            'Flavours - Savory': ['Chicken flavor', 'Chicken powder', 'Chicken oil', 'Curry flavor', 'Onion flavor', 'Onion powder', 'Garlic powder', 'M.S.G. (Monosodium glutamate)', 'Sea food flavor', 'Tomato flavor'],
-            'Flavours - Sweet': ['Vanilla flavor', 'Strawberry powder', 'Mixed fruit powder', 'Ginger with honey premix'],
-            'Grains & Flours': ['Australian wheat', 'Russian wheat', 'Garri', 'Rice'],
-            'Herbs & Spices': ['Ginger powder', 'Tumeric powder', 'Pepper'],
-            'Oils & Fats': ['Palm oil', 'Lecithin'],
-            'Powders & Drinks': ['Black tea powder', 'Cocoa powder', 'Coffee powder'],
-            'Processing Aids': ['Magnesium stearate', 'Silicon dioxide'],
-            'Sweeteners': ['Sugar'],
-            'Tomato Products': ['Tomato concentrate', 'Tomato powder'],
-            'Vitamins': ['Vitamins'],
-            'Water & Basic': ['Salt', 'Water']
-        } %}
-        
-        <div class="mb-3">
-            <input type="text" id="materialSearch" placeholder="🔍 Search materials..." 
-                   onkeyup="filterMaterials()"
-                   class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500">
-        </div>
-        
-        <div class="space-y-2 max-h-[500px] overflow-y-auto" id="materialsContainer">
-            {% for category_name, category_items in categories.items() %}
-                {% set cat_materials = [] %}
-                {% for mat in materials %}
-                    {% if mat.name in category_items %}
-                        {% set _ = cat_materials.append(mat) %}
-                    {% endif %}
-                {% endfor %}
-                
-                {% if cat_materials|length > 0 %}
+        <div class="section-content">
+            <div id="newMaterialForm" class="hidden border border-green-200 rounded-lg p-4 mb-4 bg-green-50">
+                <h3 class="font-semibold mb-3 text-green-800">Add New Material</h3>
+                <form method="POST" action="{{ url_for('create_material') }}">
+                    <div class="grid grid-cols-2 gap-3 mb-3">
+                        <div><label class="block text-xs text-gray-600 mb-1">Code *</label><input type="text" name="code" required placeholder="e.g., RM-050" class="w-full px-2 py-1 border rounded text-sm"></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Name *</label><input type="text" name="name" required placeholder="Material name" class="w-full px-2 py-1 border rounded text-sm"></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Supplier</label><input type="text" name="supplier" placeholder="Supplier name" class="w-full px-2 py-1 border rounded text-sm"></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Unit</label><input type="text" name="unit" value="kg" class="w-full px-2 py-1 border rounded text-sm"></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Cost/Unit</label><input type="number" step="0.01" name="cost_per_unit" value="0" class="w-full px-2 py-1 border rounded text-sm"></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Stock Level</label><input type="number" step="0.01" name="stock_level" value="0" class="w-full px-2 py-1 border rounded text-sm"></div>
+                    </div>
+                    <button type="submit" class="w-full bg-green-600 text-white py-1 rounded text-sm"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">Save Material</span></button>
+                </form>
+            </div>
+            
+            {% if materials %}
+            {% set categories={'Acids & Preservatives':['Acetic acid','Citric acid','Potassium sorbate','Sodium ascorbate'],'Colours':['Colour (Erythrosine)','Colour (Ponceau 4R)','Colour (Sunset Yellow)','Colour (Allura Red)','Caramel'],'Dairy & Creamers':['Non-dairy creamer (F28)','Non-dairy creamer (A20)'],'Fibres & Starches':['Soya Fibre','Corn starch','Maltodextrin','CMC (Carboxymethyl cellulose)'],'Flavours - Savory':['Chicken flavor','Chicken powder','Chicken oil','Curry flavor','Onion flavor','Onion powder','Garlic powder','M.S.G. (Monosodium glutamate)','Sea food flavor','Tomato flavor'],'Flavours - Sweet':['Vanilla flavor','Strawberry powder','Mixed fruit powder','Ginger with honey premix'],'Grains & Flours':['Australian wheat','Russian wheat','Garri','Rice'],'Herbs & Spices':['Ginger powder','Tumeric powder','Pepper'],'Oils & Fats':['Palm oil','Lecithin'],'Powders & Drinks':['Black tea powder','Cocoa powder','Coffee powder'],'Processing Aids':['Magnesium stearate','Silicon dioxide'],'Sweeteners':['Sugar'],'Tomato Products':['Tomato concentrate','Tomato powder'],'Vitamins':['Vitamins'],'Water & Basic':['Salt','Water']} %}
+            <div class="mb-3"><input type="text" id="materialSearch" placeholder="🔍 Search materials..." onkeyup="filterMaterials()" class="w-full px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500"></div>
+            <div class="space-y-2 max-h-[500px] overflow-y-auto" id="materialsContainer">
+                {% for cat_name, cat_items in categories.items() %}
+                {% set cm=[] %}{% for mat in materials %}{% if mat.name in cat_items %}{% set _=cm.append(mat) %}{% endif %}{% endfor %}
+                {% if cm|length>0 %}
                 <div class="border rounded-lg overflow-hidden material-category">
-                    <button onclick="toggleCategory(this)" 
-                            class="w-full flex justify-between items-center px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left">
-                        <span class="font-medium text-sm text-gray-700">
-                            {{ category_name }}
-                            <span class="text-xs text-gray-400 ml-1">({{ cat_materials|length }})</span>
-                        </span>
-                        <svg class="w-4 h-4 text-gray-400 transition-transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </button>
-                    
+                    <button onclick="toggleCategory(this)" class="w-full flex justify-between items-center px-3 py-2 bg-gray-50 hover:bg-gray-100 text-left"><span class="font-medium text-sm text-gray-700">{{ cat_name }}<span class="text-xs text-gray-400 ml-1">({{ cm|length }})</span></span><svg class="w-4 h-4 text-gray-400 transition-transform rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg></button>
                     <div class="divide-y">
-                        {% for mat in cat_materials %}
+                        {% for mat in cm %}
                         <div class="material-item" data-name="{{ mat.name|lower }}" data-code="{{ mat.code|lower }}" data-supplier="{{ mat.supplier|lower }}">
-                            <div class="px-3 py-2 hover:bg-gray-50 flex justify-between items-center text-sm">
-                                <div class="flex-1 min-w-0">
-                                    <span class="font-medium text-xs">{{ mat.code }}</span>
-                                    <span class="text-gray-600 ml-2">{{ mat.name }}</span>
-                                    <span class="text-gray-400 text-xs ml-1">{{ mat.supplier if mat.supplier != 'TBD' else '' }}</span>
-                                </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <span class="text-xs text-gray-400">{{ mat.stock_level }} {{ mat.unit }}</span>
-                                    {% if mat.cost_per_unit and mat.cost_per_unit > 0 %}
-                                    <span class="text-xs text-gray-500">${{ "%.2f"|format(mat.cost_per_unit) }}</span>
-                                    {% endif %}
-                                    <button onclick="event.stopPropagation(); document.getElementById('edit-mat-{{ mat.id }}').classList.toggle('hidden')"
-                                            class="text-blue-500 text-xs hover:underline">Edit</button>
-                                </div>
-                            </div>
-                            <div id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50 px-3 py-2 border-t">
-                                <form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap">
-                                    <div>
-                                        <label class="text-xs text-gray-500">Name</label>
-                                        <input type="text" name="name" value="{{ mat.name }}" class="w-32 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-gray-500">Supplier</label>
-                                        <input type="text" name="supplier" value="{{ mat.supplier or '' }}" class="w-28 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-gray-500">Unit</label>
-                                        <input type="text" name="unit" value="{{ mat.unit }}" class="w-16 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-gray-500">Cost/Unit</label>
-                                        <input type="number" step="0.01" name="cost_per_unit" value="{{ mat.cost_per_unit or 0 }}" class="w-20 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <div>
-                                        <label class="text-xs text-gray-500">Stock</label>
-                                        <input type="number" step="0.01" name="stock_level" value="{{ mat.stock_level }}" class="w-20 px-2 py-1 border rounded text-sm">
-                                    </div>
-                                    <button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button>
-                                    <button type="button" onclick="document.getElementById('edit-mat-{{ mat.id }}').classList.add('hidden')" 
-                                            class="text-gray-400 hover:text-gray-600 text-xs">Cancel</button>
-                                </form>
-                            </div>
+                            <div class="px-3 py-2 hover:bg-gray-50 flex justify-between items-center text-sm"><div class="flex-1 min-w-0"><span class="font-medium text-xs">{{ mat.code }}</span><span class="text-gray-600 ml-2">{{ mat.name }}</span><span class="text-gray-400 text-xs ml-1">{{ mat.supplier if mat.supplier!='TBD' else '' }}</span></div><div class="flex items-center gap-2 flex-shrink-0"><span class="text-xs text-gray-400">{{ mat.stock_level }} {{ mat.unit }}</span>{% if mat.cost_per_unit and mat.cost_per_unit>0 %}<span class="text-xs text-gray-500">${{ "%.2f"|format(mat.cost_per_unit) }}</span>{% endif %}<button onclick="event.stopPropagation();document.getElementById('edit-mat-{{ mat.id }}').classList.toggle('hidden')" class="text-blue-500 text-xs hover:underline">Edit</button></div></div>
+                            <div id="edit-mat-{{ mat.id }}" class="hidden bg-yellow-50 px-3 py-2 border-t"><form method="POST" action="{{ url_for('update_material', material_id=mat.id) }}" class="flex gap-2 items-end flex-wrap"><div><label class="text-xs text-gray-500">Name</label><input type="text" name="name" value="{{ mat.name }}" class="w-32 px-2 py-1 border rounded text-sm"></div><div><label class="text-xs text-gray-500">Supplier</label><input type="text" name="supplier" value="{{ mat.supplier or '' }}" class="w-28 px-2 py-1 border rounded text-sm"></div><div><label class="text-xs text-gray-500">Unit</label><input type="text" name="unit" value="{{ mat.unit }}" class="w-16 px-2 py-1 border rounded text-sm"></div><div><label class="text-xs text-gray-500">Cost/Unit</label><input type="number" step="0.01" name="cost_per_unit" value="{{ mat.cost_per_unit or 0 }}" class="w-20 px-2 py-1 border rounded text-sm"></div><div><label class="text-xs text-gray-500">Stock</label><input type="number" step="0.01" name="stock_level" value="{{ mat.stock_level }}" class="w-20 px-2 py-1 border rounded text-sm"></div><button type="submit" class="bg-blue-500 text-white px-3 py-1 rounded text-xs">Save</button><button type="button" onclick="document.getElementById('edit-mat-{{ mat.id }}').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 text-xs">Cancel</button></form></div>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
-                {% endif %}
-            {% endfor %}
+                {% endif %}{% endfor %}
+            </div>
+            {% else %}<p class="text-gray-400 text-center py-8">No materials created yet</p>{% endif %}
         </div>
-        
-        {% else %}
-        <p class="text-gray-400 text-center py-8">No materials created yet</p>
-        {% endif %}
     </div>
 </div>
 
-<!-- Chart.js CDN -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-<script type="application/json" id="qcParamsData">{{ qc_parameters_json | safe if qc_parameters_json else '[]' }}</script>
-<script type="application/json" id="allTestsData">{{ all_tests_json | safe if all_tests_json else '[]' }}</script>
-
+<script type="application/json" id="qcParamsData">{{ qc_parameters_json|safe if qc_parameters_json else '[]' }}</script>
+<script type="application/json" id="allTestsData">{{ all_tests_json|safe if all_tests_json else '[]' }}</script>
 <script>
-var qcParams = [];
-var allTests = [];
-
-try {
-    var paramsEl = document.getElementById('qcParamsData');
-    if (paramsEl) qcParams = JSON.parse(paramsEl.textContent);
-} catch(e) { qcParams = []; }
-
-try {
-    var testsEl = document.getElementById('allTestsData');
-    if (testsEl) allTests = JSON.parse(testsEl.textContent);
-} catch(e) { allTests = []; }
-
-if (allTests.length > 0) allTests.reverse();
-
-function buildParamDropdown() {
-    var paramSet = new Set();
-    qcParams.forEach(function(p) {
-        if (p.name) paramSet.add(p.name);
-    });
-    
-    var select = document.getElementById('trendParamFilter');
-    select.innerHTML = '<option value="all">All Parameters</option>';
-    paramSet.forEach(function(param) {
-        var opt = document.createElement('option');
-        opt.value = param;
-        opt.textContent = param;
-        select.appendChild(opt);
-    });
-}
-
-var chartColors = [
-    '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
-    '#EC4899', '#06B6D4', '#F97316', '#6366F1', '#14B8A6',
-    '#E11D48', '#7C3AED', '#0891B2', '#D97706', '#059669'
-];
-
-var trendChart = null;
-
-function updateTrendChart() {
-    var formulaFilter = document.getElementById('trendFormulaFilter').value;
-    var paramFilter = document.getElementById('trendParamFilter').value;
-    
-    var filteredTests = allTests.filter(function(t) {
-        if (formulaFilter !== 'all' && t.formula_id != formulaFilter) return false;
-        return true;
-    });
-    
-    var datasets = {};
-    filteredTests.forEach(function(test, testIndex) {
-        var params = test.parameters;
-        if (typeof params === 'string') {
-            try { params = JSON.parse(params); } catch(e) { return; }
-        }
-        if (!params) return;
-        
-        params.forEach(function(p) {
-            if (!p.name) return;
-            if (paramFilter !== 'all' && p.name !== paramFilter) return;
-            
-            var resultVal = parseFloat(p.result);
-            if (isNaN(resultVal)) return;
-            
-            if (!datasets[p.name]) {
-                var colorIndex = Object.keys(datasets).length % chartColors.length;
-                var label = p.name;
-                if (p.unit) label += ' (' + p.unit + ')';
-                
-                datasets[p.name] = {
-                    label: label,
-                    data: [],
-                    borderColor: chartColors[colorIndex],
-                    backgroundColor: chartColors[colorIndex] + '20',
-                    borderWidth: 2,
-                    tension: 0.3,
-                    fill: false,
-                    pointRadius: 4,
-                    pointHoverRadius: 6
-                };
-            }
-            
-            while (datasets[p.name].data.length < testIndex) {
-                datasets[p.name].data.push(null);
-            }
-            datasets[p.name].data.push(resultVal);
-        });
-    });
-    
-    var labels = filteredTests.map(function(t) { return t.batch; });
-    
-    if (trendChart) trendChart.destroy();
-    
-    var ctx = document.getElementById('trendChart').getContext('2d');
-    
-    var dsArray = Object.values(datasets);
-    if (dsArray.length === 0) {
-        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        return;
-    }
-    
-    trendChart = new Chart(ctx, {
-        type: 'line',
-        data: { labels: labels, datasets: dsArray },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { intersect: false, mode: 'index' },
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { usePointStyle: true, padding: 20, font: { size: 11 } }
-                }
-            },
-            scales: {
-                x: {
-                    title: { display: true, text: 'Batch', font: { size: 11 } },
-                    ticks: { maxRotation: 45, font: { size: 10 } }
-                },
-                y: {
-                    title: { display: true, text: 'Result Value', font: { size: 11 } },
-                    beginAtZero: false,
-                    ticks: { font: { size: 10 } }
-                }
-            }
-        }
-    });
-}
-
-function toggleCategory(button) {
-    var itemsDiv = button.nextElementSibling;
-    var chevron = button.querySelector('svg');
-    itemsDiv.classList.toggle('hidden');
-    chevron.classList.toggle('rotate-90');
-}
-
-function filterMaterials() {
-    var query = document.getElementById('materialSearch').value.toLowerCase();
-    var categories = document.querySelectorAll('.material-category');
-    
-    categories.forEach(function(category) {
-        var items = category.querySelectorAll('.material-item');
-        var hasVisible = false;
-        
-        items.forEach(function(item) {
-            var name = item.getAttribute('data-name') || '';
-            var code = item.getAttribute('data-code') || '';
-            var supplier = item.getAttribute('data-supplier') || '';
-            
-            if (name.indexOf(query) > -1 || code.indexOf(query) > -1 || supplier.indexOf(query) > -1) {
-                item.style.display = '';
-                hasVisible = true;
-            } else {
-                item.style.display = 'none';
-            }
-        });
-        
-        category.style.display = hasVisible ? '' : 'none';
-    });
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    buildParamDropdown();
-    if (allTests.length > 0) updateTrendChart();
-});
+var qcParams=[],allTests=[];
+try{var pe=document.getElementById('qcParamsData');if(pe)qcParams=JSON.parse(pe.textContent)}catch(e){}
+try{var te=document.getElementById('allTestsData');if(te)allTests=JSON.parse(te.textContent)}catch(e){}
+if(allTests.length>0)allTests.reverse();
+function buildParamDropdown(){var s=new Set();qcParams.forEach(function(p){if(p.name)s.add(p.name)});var sel=document.getElementById('trendParamFilter');sel.innerHTML='<option value="all">All</option>';s.forEach(function(x){sel.innerHTML+='<option value="'+x+'">'+x+'</option>'})}
+var cc=['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#F97316','#6366F1','#14B8A6','#E11D48','#7C3AED','#0891B2','#D97706','#059669'],trendChart=null;
+function updateTrendChart(){var ff=document.getElementById('trendFormulaFilter').value,pf=document.getElementById('trendParamFilter').value,ft=allTests;if(ff!=='all')ft=ft.filter(function(t){return t.formula_id==ff});var ds={};ft.forEach(function(t,i){var p=t.parameters;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){return}}if(!p)return;p.forEach(function(x){if(!x.name)return;if(pf!=='all'&&x.name!==pf)return;var v=parseFloat(x.result);if(isNaN(v))return;if(!ds[x.name]){ds[x.name]={label:x.name+(x.unit?' ('+x.unit+')':''),data:[],borderColor:cc[Object.keys(ds).length%cc.length],backgroundColor:cc[Object.keys(ds).length%cc.length]+'20',borderWidth:2,tension:0.3,fill:false,pointRadius:4,pointHoverRadius:6}}while(ds[x.name].data.length<i)ds[x.name].data.push(null);ds[x.name].data.push(v)})});var labels=ft.map(function(t){return t.batch});if(trendChart)trendChart.destroy();var ctx=document.getElementById('trendChart').getContext('2d'),arr=Object.values(ds);if(arr.length===0){ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);return}trendChart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:arr},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:20,font:{size:11}}}},scales:{x:{title:{display:true,text:'Batch',font:{size:11}},ticks:{maxRotation:45,font:{size:10}}},y:{title:{display:true,text:'Result',font:{size:11}},beginAtZero:false,ticks:{font:{size:10}}}}}})}
+function toggleCategory(b){var d=b.nextElementSibling,c=b.querySelector('svg');d.classList.toggle('hidden');c.classList.toggle('rotate-90')}
+function filterMaterials(){var q=document.getElementById('materialSearch').value.toLowerCase(),cats=document.querySelectorAll('.material-category');cats.forEach(function(cat){var items=cat.querySelectorAll('.material-item'),vis=false;items.forEach(function(item){var n=item.getAttribute('data-name')||'',c=item.getAttribute('data-code')||'',s=item.getAttribute('data-supplier')||'';if(n.indexOf(q)>-1||c.indexOf(q)>-1||s.indexOf(q)>-1){item.style.display='';vis=true}else{item.style.display='none'}});cat.style.display=vis?'':'none'})}
+document.addEventListener('DOMContentLoaded',function(){buildParamDropdown();if(allTests.length>0)updateTrendChart()});
 </script>
-
 {% endblock %}
