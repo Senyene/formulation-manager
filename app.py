@@ -1018,7 +1018,9 @@ def finished_goods():
     formulas = Formula.query.filter_by(status='approved').all()
     qc_parameters = QCParameter.query.filter_by(is_active=True).order_by(QCParameter.name).all()
     recent_tests = FinishedGoodsTest.query.order_by(FinishedGoodsTest.test_date.desc()).limit(20).all()
-    return render_template('finished_goods.html', formulas=formulas, qc_parameters=qc_parameters, recent_tests=recent_tests)
+    now = datetime.utcnow()
+    shift = 'A' if 7 <= now.hour < 19 else 'B'
+    return render_template('finished_goods.html', formulas=formulas, qc_parameters=qc_parameters, recent_tests=recent_tests, shift=shift, today=now.date())
 
 # ============================================
 # END OF SHIFT REPORT ROUTES
@@ -1049,6 +1051,29 @@ def shift_report():
             flash('Please add at least one section entry.', 'error')
             return redirect(url_for('shift_report'))
         
+        # Lab section data
+        lab_notes = request.form.get('lab_notes', '').strip()
+        lab_report = EndOfShiftReport(
+            shift=shift,
+            report_date=today,
+            section='Laboratory',
+            mixing_plant=request.form.get('lab_sample_source', ''),
+            product='Calibration: pH=' + request.form.get('lab_ph_calibrated', '?') + 
+                    ' Ref=' + request.form.get('lab_refracto_calibrated', '?') + 
+                    ' Therm=' + request.form.get('lab_thermo_calibrated', '?') + 
+                    ' Scale=' + request.form.get('lab_scale_calibrated', '?'),
+            filling_sku='Brix:' + request.form.get('lab_concentrate_brix', '?') + 
+                        ' pH:' + request.form.get('lab_concentrate_ph', '?'),
+            packaging_sku='Acid:' + request.form.get('lab_concentrate_acidity', '?') + 
+                          ' Bost:' + request.form.get('lab_concentrate_bostwick', '?'),
+            total_pallets=safe_int(request.form.get('lab_sample_count', 0)),
+            total_cartons=0,
+            notes=lab_notes,
+            submitted_by=current_user.display_name
+        )
+        db.session.add(lab_report)
+        
+        # Production sections
         for i in range(len(sections)):
             report = EndOfShiftReport(
                 shift=shift,
@@ -1073,7 +1098,7 @@ def shift_report():
     # Check if report already submitted for this shift
     existing = EndOfShiftReport.query.filter_by(shift=shift, report_date=today).first()
     
-    return render_template('shift_report.html', shift=shift, today=today, already_submitted=existing is not None)
+    return render_template('shift_report.html', shift=shift, today=today, submitted=existing is not None)
 
 @app.route('/qc/shift-report/print')
 @login_required

@@ -18,19 +18,70 @@
         <h1 class="text-2xl font-bold text-gray-800">📋 End of Shift Report</h1>
         <p class="text-sm text-gray-500">Shift {{ shift }} | {{ today.strftime('%d-%b-%Y') }}</p>
     </div>
-    <span id="currentShift" class="text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800">SHIFT {{ shift }}</span>
+    <div class="flex items-center gap-3">
+        <span id="reportStatus" class="text-xs px-2 py-1 rounded font-medium bg-yellow-100 text-yellow-800">DRAFT</span>
+        <span id="currentShift" class="text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800">SHIFT {{ shift }}</span>
+        <span id="liveClock" class="text-sm font-mono text-gray-600 bg-gray-100 px-3 py-1 rounded">00:00:00</span>
+    </div>
 </div>
 
-{% if already_submitted %}
+{% if submitted %}
 <div class="bg-green-50 border border-green-200 rounded-lg p-6 text-center mb-6">
-    <p class="text-green-800 font-semibold text-lg mb-2">✅ Shift Report Already Submitted</p>
-    <p class="text-green-600">The end of shift report for Shift {{ shift }} on {{ today.strftime('%d-%b-%Y') }} has been submitted.</p>
-    <a href="{{ url_for('print_shift_report', shift=shift, date=today.isoformat()) }}" class="inline-block mt-3 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm">🖨️ Print Report</a>
+    <p class="text-green-800 font-semibold text-lg mb-2">✅ Shift Report Submitted</p>
+    <p class="text-green-600">This report has been finalized for Shift {{ shift }} on {{ today.strftime('%d-%b-%Y') }}.</p>
+    <div class="flex justify-center gap-3 mt-3">
+        <a href="{{ url_for('print_shift_report', shift=shift, date=today.isoformat()) }}" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 text-sm">🖨️ Print Report</a>
+    </div>
 </div>
 {% else %}
+<div class="mb-4 flex gap-2 no-print">
+    <button type="button" onclick="saveDraft()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm">💾 Save Draft</button>
+    <button type="button" onclick="loadDraft()" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 text-sm">📂 Load Draft</button>
+    <span id="draftStatus" class="text-xs text-gray-400 flex items-center"></span>
+</div>
+
 <form method="POST" id="shiftReportForm">
     <div id="sectionsContainer">
-        <!-- Tin Section -->
+        
+        <!-- ============================================ -->
+        <!-- LABORATORY SECTION                           -->
+        <!-- ============================================ -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 border-l-4 border-purple-400">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🔬 Laboratory Section <span class="text-xs font-normal text-gray-400">(Tomato Paste/Mix Production)</span></h2>
+            
+            <div class="mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">📐 Equipment Calibration</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div><label class="block text-xs text-gray-600 mb-1">pH Meter</label><select name="lab_ph_calibrated" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">--</option><option value="yes">✅ Calibrated</option><option value="no">❌ Not Calibrated</option></select></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Refractometer</label><select name="lab_refracto_calibrated" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">--</option><option value="yes">✅ Calibrated</option><option value="no">❌ Not Calibrated</option></select></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Thermometer</label><select name="lab_thermo_calibrated" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">--</option><option value="yes">✅ Calibrated</option><option value="no">❌ Not Calibrated</option></select></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Weighing Scale</label><select name="lab_scale_calibrated" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">--</option><option value="yes">✅ Calibrated</option><option value="no">❌ Not Calibrated</option></select></div>
+                </div>
+            </div>
+            
+            <div class="mb-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">🧪 Concentrate / Process Check</h3>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Brix</label><input type="text" name="lab_concentrate_brix" placeholder="°Bx" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate pH</label><input type="text" name="lab_concentrate_ph" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Acidity</label><input type="text" name="lab_concentrate_acidity" placeholder="%" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Bostwick</label><input type="text" name="lab_concentrate_bostwick" placeholder="cm" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">📍 Sample Source</h3>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block text-xs text-gray-600 mb-1">Samples Brought From</label><select name="lab_sample_source" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="OTP">Old Tin Plant (OTP)</option><option value="NTP">New Tin Plant (NTP)</option><option value="Both">Both OTP & NTP</option></select></div>
+                    <div><label class="block text-xs text-gray-600 mb-1">Number of Samples</label><input type="number" name="lab_sample_count" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
+                <div class="mt-2"><label class="block text-xs text-gray-600 mb-1">Lab Notes / Observations</label><textarea name="lab_notes" rows="2" placeholder="Any lab observations, equipment issues, or process notes..." class="w-full px-2 py-1.5 border rounded text-sm"></textarea></div>
+            </div>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- TIN SECTION                                  -->
+        <!-- ============================================ -->
         <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
             <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🔧 Tin Section</h2>
             <input type="hidden" name="section[]" value="Tin">
@@ -97,10 +148,57 @@
     
     <div class="mb-4">
         <label class="block text-sm font-medium text-gray-700 mb-1">General Notes</label>
-        <textarea name="notes" rows="3" placeholder="Any shift notes, incidents, or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
+        <textarea name="notes" id="generalNotes" rows="3" placeholder="Any shift notes, incidents, or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
     </div>
     
-    <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg" onclick="return confirm('Submit end of shift report? This cannot be edited after submission.')"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">📋 Submit End of Shift Report</span></button>
+    <div class="flex gap-2">
+        <button type="submit" class="flex-1 bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg" onclick="return confirm('Submit final end of shift report? This cannot be edited after submission.')"><span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">📋 Submit Final Report</span></button>
+        <button type="button" onclick="saveDraft()" class="bg-gray-500 text-white px-6 py-3 rounded hover:bg-gray-600 font-semibold text-lg no-print">💾 Save Draft</button>
+    </div>
 </form>
 {% endif %}
+
+<script>
+function getCurrentShift(){var h=new Date().getHours();return(h>=7&&h<19)?'A':'B';}
+function updateClock(){var now=new Date();document.getElementById('liveClock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');var shift=getCurrentShift(),el=document.getElementById('currentShift');el.textContent='SHIFT '+shift;el.className='text-xs px-2 py-1 rounded font-medium '+(shift==='A'?'bg-blue-100 text-blue-800':'bg-indigo-100 text-indigo-800');}
+
+function saveDraft(){
+    var draft={};
+    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_brix','lab_concentrate_ph','lab_concentrate_acidity','lab_concentrate_bostwick','lab_sample_source','lab_sample_count','lab_notes'].forEach(function(n){
+        var el=document.querySelector('[name="'+n+'"]');if(el)draft[n]=el.value;
+    });
+    ['section[]','mixing_plant[]','product[]','filling_sku[]','packaging_sku[]','total_pallets[]','total_cartons[]'].forEach(function(n){
+        var els=document.querySelectorAll('[name="'+n+'"]');draft[n]=[];els.forEach(function(e){draft[n].push(e.value);});
+    });
+    draft['notes']=document.getElementById('generalNotes').value;
+    var key='shift_report_draft_'+getCurrentShift()+'_'+new Date().toISOString().split('T')[0];
+    localStorage.setItem(key,JSON.stringify(draft));
+    document.getElementById('draftStatus').textContent='✅ Draft saved at '+new Date().toLocaleTimeString();
+    document.getElementById('reportStatus').textContent='DRAFT SAVED';
+    document.getElementById('reportStatus').className='text-xs px-2 py-1 rounded font-medium bg-yellow-100 text-yellow-800';
+    setTimeout(function(){document.getElementById('draftStatus').textContent='';},3000);
+}
+
+function loadDraft(){
+    var key='shift_report_draft_'+getCurrentShift()+'_'+new Date().toISOString().split('T')[0];
+    var raw=localStorage.getItem(key);
+    if(!raw){alert('No draft found for this shift.');return;}
+    if(!confirm('Load saved draft? Current entries will be replaced.'))return;
+    var draft=JSON.parse(raw);
+    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_brix','lab_concentrate_ph','lab_concentrate_acidity','lab_concentrate_bostwick','lab_sample_source','lab_sample_count','lab_notes'].forEach(function(n){
+        var el=document.querySelector('[name="'+n+'"]');if(el&&draft[n]!==undefined)el.value=draft[n];
+    });
+    ['section[]','mixing_plant[]','product[]','filling_sku[]','packaging_sku[]','total_pallets[]','total_cartons[]'].forEach(function(n){
+        var els=document.querySelectorAll('[name="'+n+'"]');if(draft[n]){els.forEach(function(e,i){if(draft[n][i]!==undefined)e.value=draft[n][i];});}
+    });
+    if(draft['notes']!==undefined)document.getElementById('generalNotes').value=draft['notes'];
+    document.getElementById('draftStatus').textContent='📂 Draft loaded';
+    document.getElementById('reportStatus').textContent='DRAFT LOADED';
+    document.getElementById('reportStatus').className='text-xs px-2 py-1 rounded font-medium bg-blue-100 text-blue-800';
+    setTimeout(function(){document.getElementById('draftStatus').textContent='';},3000);
+}
+
+setInterval(function(){if(document.getElementById('shiftReportForm'))saveDraft();},60000);
+document.addEventListener('DOMContentLoaded',function(){updateClock();setInterval(updateClock,1000);});
+</script>
 {% endblock %}

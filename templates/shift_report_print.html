@@ -15,7 +15,7 @@
         </div>
         
         {% if reports %}
-        {% set sections = {'Tin': [], 'Sachet_Pouch': [], 'Cube': [], 'Dry': []} %}
+        {% set sections = {'Laboratory': [], 'Tin': [], 'Sachet_Pouch': [], 'Cube': [], 'Dry': []} %}
         {% for r in reports %}
             {% if r.section in sections %}
                 {% set _ = sections[r.section].append(r) %}
@@ -25,12 +25,27 @@
         {% for section_name, section_reports in sections.items() %}
         {% if section_reports %}
         <div class="mb-6 border rounded-lg overflow-hidden">
-            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">
-                {% if section_name == 'Tin' %}🔧 Tin Section
-                {% elif section_name == 'Sachet_Pouch' %}📦 Sachet & Pouch Section
-                {% elif section_name == 'Cube' %}🧊 Cube Section
-                {% else %}🏭 Dry Section{% endif %}
-            </h2>
+            {% if section_name == 'Laboratory' %}
+            <h2 class="bg-purple-100 px-4 py-2 font-bold text-lg">🔬 Laboratory Section</h2>
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Sample Source</th><th class="px-3 py-2 text-left">Calibration Status</th><th class="px-3 py-2 text-left">Concentrate Check</th><th class="px-3 py-2 text-left">Results</th><th class="px-3 py-2 text-right">Samples</th></tr></thead>
+                <tbody>
+                    {% for r in section_reports %}
+                    <tr class="border-t">
+                        <td class="px-3 py-2">{{ r.mixing_plant or '-' }}</td>
+                        <td class="px-3 py-2 text-xs">{{ r.product or '-' }}</td>
+                        <td class="px-3 py-2 text-xs">{{ r.filling_sku or '-' }}</td>
+                        <td class="px-3 py-2 text-xs">{{ r.packaging_sku or '-' }}</td>
+                        <td class="px-3 py-2 text-right">{{ r.total_pallets }}</td>
+                    </tr>
+                    {% if r.notes %}
+                    <tr class="border-t bg-gray-50"><td colspan="5" class="px-3 py-2 text-xs text-gray-600">📝 Lab Notes: {{ r.notes }}</td></tr>
+                    {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% elif section_name == 'Tin' %}
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">🔧 Tin Section</h2>
             <table class="w-full text-sm">
                 <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Mixing Plant</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-left">Filling SKU</th><th class="px-3 py-2 text-left">Packaging SKU</th><th class="px-3 py-2 text-right">Pallets</th><th class="px-3 py-2 text-right">Cartons</th></tr></thead>
                 <tbody>
@@ -40,21 +55,56 @@
                     <tr class="border-t font-bold bg-gray-50"><td colspan="4" class="px-3 py-2">Section Total</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_pallets') }}</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_cartons') }}</td></tr>
                 </tbody>
             </table>
+            {% elif section_name == 'Sachet_Pouch' %}
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">📦 Sachet & Pouch Section</h2>
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Mixing Plant</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-left">Filling SKU</th><th class="px-3 py-2 text-left">Packaging SKU</th><th class="px-3 py-2 text-right">Pallets</th><th class="px-3 py-2 text-right">Cartons</th></tr></thead>
+                <tbody>
+                    {% for r in section_reports %}
+                    <tr class="border-t"><td class="px-3 py-2">{{ r.mixing_plant or '-' }}</td><td class="px-3 py-2">{{ r.product or '-' }}</td><td class="px-3 py-2">{{ r.filling_sku or '-' }}</td><td class="px-3 py-2">{{ r.packaging_sku or '-' }}</td><td class="px-3 py-2 text-right">{{ r.total_pallets }}</td><td class="px-3 py-2 text-right">{{ r.total_cartons }}</td></tr>
+                    {% endfor %}
+                    <tr class="border-t font-bold bg-gray-50"><td colspan="4" class="px-3 py-2">Section Total</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_pallets') }}</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_cartons') }}</td></tr>
+                </tbody>
+            </table>
+            {% elif section_name == 'Cube' %}
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">🧊 Cube Section</h2>
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Mixing Plant</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-left">Filling SKU</th><th class="px-3 py-2 text-left">Packaging SKU</th><th class="px-3 py-2 text-right">Pallets</th><th class="px-3 py-2 text-right">Cartons</th></tr></thead>
+                <tbody>
+                    {% for r in section_reports %}
+                    <tr class="border-t"><td class="px-3 py-2">{{ r.mixing_plant or '-' }}</td><td class="px-3 py-2">{{ r.product or '-' }}</td><td class="px-3 py-2">{{ r.filling_sku or '-' }}</td><td class="px-3 py-2">{{ r.packaging_sku or '-' }}</td><td class="px-3 py-2 text-right">{{ r.total_pallets }}</td><td class="px-3 py-2 text-right">{{ r.total_cartons }}</td></tr>
+                    {% endfor %}
+                    <tr class="border-t font-bold bg-gray-50"><td colspan="4" class="px-3 py-2">Section Total</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_pallets') }}</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_cartons') }}</td></tr>
+                </tbody>
+            </table>
+            {% elif section_name == 'Dry' %}
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">🏭 Dry Section</h2>
+            <table class="w-full text-sm">
+                <thead><tr class="bg-gray-50"><th class="px-3 py-2 text-left">Mixing Plant</th><th class="px-3 py-2 text-left">Product</th><th class="px-3 py-2 text-left">Filling SKU</th><th class="px-3 py-2 text-left">Packaging SKU</th><th class="px-3 py-2 text-right">Pallets</th><th class="px-3 py-2 text-right">Cartons</th></tr></thead>
+                <tbody>
+                    {% for r in section_reports %}
+                    <tr class="border-t"><td class="px-3 py-2">{{ r.mixing_plant or '-' }}</td><td class="px-3 py-2">{{ r.product or '-' }}</td><td class="px-3 py-2">{{ r.filling_sku or '-' }}</td><td class="px-3 py-2">{{ r.packaging_sku or '-' }}</td><td class="px-3 py-2 text-right">{{ r.total_pallets }}</td><td class="px-3 py-2 text-right">{{ r.total_cartons }}</td></tr>
+                    {% endfor %}
+                    <tr class="border-t font-bold bg-gray-50"><td colspan="4" class="px-3 py-2">Section Total</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_pallets') }}</td><td class="px-3 py-2 text-right">{{ section_reports|sum(attribute='total_cartons') }}</td></tr>
+                </tbody>
+            </table>
+            {% endif %}
         </div>
         {% endif %}
         {% endfor %}
         
         <!-- Grand Total -->
+        {% set production_reports = reports|rejectattr('section', 'equalto', 'Laboratory')|list %}
         <div class="border rounded-lg overflow-hidden mb-4">
-            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">📊 Grand Total</h2>
+            <h2 class="bg-gray-100 px-4 py-2 font-bold text-lg">📊 Grand Total (Production)</h2>
             <table class="w-full text-sm">
-                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Pallets</td><td class="px-4 py-3 text-right">{{ reports|sum(attribute='total_pallets') }}</td></tr>
-                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Cartons</td><td class="px-4 py-3 text-right">{{ reports|sum(attribute='total_cartons') }}</td></tr>
+                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Pallets</td><td class="px-4 py-3 text-right">{{ production_reports|sum(attribute='total_pallets') }}</td></tr>
+                <tr class="font-bold text-lg"><td class="px-4 py-3">Total Cartons</td><td class="px-4 py-3 text-right">{{ production_reports|sum(attribute='total_cartons') }}</td></tr>
             </table>
         </div>
         
         {% if reports[0].notes %}
-        <div class="mb-4"><h3 class="font-bold text-sm mb-1">Notes:</h3><p class="text-gray-700">{{ reports[0].notes }}</p></div>
+        <div class="mb-4"><h3 class="font-bold text-sm mb-1">General Notes:</h3><p class="text-gray-700">{{ reports[0].notes }}</p></div>
         {% endif %}
         
         <div class="text-sm text-gray-500 mt-4">Submitted by: {{ reports[0].submitted_by }} | {{ reports[0].created_at.strftime('%d-%b-%Y %H:%M') }}</div>

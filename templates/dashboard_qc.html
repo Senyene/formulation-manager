@@ -14,6 +14,7 @@
     {% endif %}
 {% endwith %}
 
+<!-- Quick Link Cards -->
 <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6 no-print">
     <a href="{{ url_for('shift_report') }}" class="bg-white rounded-lg shadow p-3 text-center hover:bg-blue-50 border-2 {% if not shift_report_done %}border-red-400 animate-pulse{% else %}border-transparent{% endif %}">
         <span class="text-2xl">📋</span>
@@ -35,8 +36,8 @@
 </div>
 
 <!-- Test Result Entry Form -->
-<div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section">
-    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-form">
+<div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section" id="qc-form">
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-form-section">
         <span class="collapse-icon text-gray-400">▼</span>
         <div class="flex justify-between items-center flex-1">
             <h2 class="text-xl font-bold">🔬 New Test Result Entry</h2>
@@ -86,11 +87,7 @@
                 </div>
                 <div id="parametersContainer">
                     <div class="parameter-row grid grid-cols-12 gap-2 mb-2 items-end">
-                        <div class="col-span-3">
-                            <select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)">
-                                <option value="">Select parameter...</option>
-                            </select>
-                        </div>
+                        <div class="col-span-3"><select name="param_name[]" class="param-name w-full px-2 py-2 border border-gray-300 rounded text-sm" onchange="onParamChange(this)"><option value="">Select parameter...</option></select></div>
                         <div class="col-span-2"><input type="text" name="param_result[]" placeholder="Result" class="w-full px-2 py-2 border border-gray-300 rounded text-sm param-result" oninput="onResultInput(this)"></div>
                         <div class="col-span-2"><input type="text" name="param_unit[]" placeholder="Unit" readonly class="param-unit w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>
                         <div class="col-span-3"><input type="text" name="param_spec[]" placeholder="Spec range" readonly class="param-spec w-full px-2 py-2 border border-gray-200 bg-gray-50 rounded text-sm text-gray-500"></div>
@@ -99,14 +96,10 @@
                 </div>
             </div>
             
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                <textarea name="notes" rows="2" placeholder="Any observations or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea>
-            </div>
+            <div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">Notes</label><textarea name="notes" rows="2" placeholder="Any observations or comments..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500"></textarea></div>
             
             <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded hover:bg-blue-700 font-semibold text-lg">
-                <span class="btn-spinner spinner" style="display:none"></span>
-                <span class="btn-text">✅ Submit Test Result</span>
+                <span class="btn-spinner spinner" style="display:none"></span><span class="btn-text">✅ Submit Test Result</span>
             </button>
         </form>
     </div>
@@ -114,69 +107,21 @@
 
 <!-- WORKSHEET MODAL -->
 <div id="worksheetModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto">
-        <div class="p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-lg font-bold">📋 Lab Worksheet</h2>
-                <button onclick="closeWorksheet()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button>
-            </div>
-            <div id="worksheetContent"><p class="text-gray-500 text-sm">Select a formula to load its worksheet parameters.</p></div>
-            <div class="mt-4 pt-4 border-t flex gap-2">
-                <button onclick="loadWorksheetToForm()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold text-sm">📋 Load These Parameters</button>
-                <button onclick="closeWorksheet()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm">Cancel</button>
-            </div>
-        </div>
-    </div>
+    <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[80vh] overflow-y-auto"><div class="p-6"><div class="flex justify-between items-center mb-4"><h2 class="text-lg font-bold">📋 Lab Worksheet</h2><button onclick="closeWorksheet()" class="text-gray-400 hover:text-gray-600 text-xl">&times;</button></div><div id="worksheetContent"><p class="text-gray-500 text-sm">Select a formula to load its worksheet parameters.</p></div><div class="mt-4 pt-4 border-t flex gap-2"><button onclick="loadWorksheetToForm()" class="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 font-semibold text-sm">📋 Load These Parameters</button><button onclick="closeWorksheet()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded hover:bg-gray-300 text-sm">Cancel</button></div></div></div>
 </div>
 
 <!-- PARAMETER TRENDS CHART -->
 <div class="bg-white rounded-lg shadow p-6 mb-6 collapsible-section">
-    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-trends">
-        <span class="collapse-icon text-gray-400">▼</span>
-        <div class="flex justify-between items-center flex-1">
-            <h2 class="text-xl font-bold">📈 Parameter Trends</h2>
-            <div class="flex gap-2 no-print" onclick="event.stopPropagation()">
-                <select id="trendFormulaFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
-                    <option value="all">All Formulas</option>
-                    {% for formula in formulas %}<option value="{{ formula.id }}">{{ formula.code }}</option>{% endfor %}
-                </select>
-                <select id="trendParamFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm">
-                    <option value="all">All Parameters</option>
-                </select>
-            </div>
-        </div>
-    </div>
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-trends"><span class="collapse-icon text-gray-400">▼</span><div class="flex justify-between items-center flex-1"><h2 class="text-xl font-bold">📈 Parameter Trends</h2><div class="flex gap-2 no-print" onclick="event.stopPropagation()"><select id="trendFormulaFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm"><option value="all">All Formulas</option>{% for formula in formulas %}<option value="{{ formula.id }}">{{ formula.code }}</option>{% endfor %}</select><select id="trendParamFilter" onchange="updateTrendChart()" class="px-3 py-1 border border-gray-300 rounded text-sm"><option value="all">All Parameters</option></select></div></div></div>
     <div class="section-content"><div class="relative" style="height: 350px;"><canvas id="trendChart"></canvas></div></div>
 </div>
 
 <!-- Recent Submissions Table -->
 <div class="bg-white rounded-lg shadow p-6 collapsible-section">
-    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-recent">
-        <span class="collapse-icon text-gray-400">▼</span>
-        <div class="flex justify-between items-center flex-1">
-            <h2 class="text-xl font-bold">📊 Recent Test Submissions</h2>
-            <a href="{{ url_for('export_qc_results') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print" onclick="event.stopPropagation()">📥 Export CSV</a>
-        </div>
-    </div>
+    <div class="flex items-center gap-2 cursor-pointer mb-4" data-collapse="qc-recent"><span class="collapse-icon text-gray-400">▼</span><div class="flex justify-between items-center flex-1"><h2 class="text-xl font-bold">📊 Recent Test Submissions</h2><a href="{{ url_for('export_qc_results') }}" class="bg-green-500 text-white px-3 py-1 rounded text-sm hover:bg-green-600 no-print" onclick="event.stopPropagation()">📥 Export CSV</a></div></div>
     <div class="section-content">
         {% if recent_tests %}
-        <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">Batch #</th><th class="px-4 py-2 text-left">Formula</th><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-left">Parameters</th><th class="px-4 py-2 text-left">Status</th><th class="px-4 py-2 text-left">Tester</th></tr></thead>
-                <tbody>
-                    {% for test in recent_tests %}
-                    <tr class="border-t hover:bg-gray-50">
-                        <td class="px-4 py-2 font-medium font-mono">{{ test.batch_number }}</td>
-                        <td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td>
-                        <td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '' }}</td>
-                        <td class="px-4 py-2">{% if test.parameters %}<span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>{% endif %}</td>
-                        <td class="px-4 py-2">{% if test.status == 'pass' %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>{% elif test.status == 'fail' %}<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>{% else %}<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>{% endif %}</td>
-                        <td class="px-4 py-2 text-gray-500">{{ test.tested_by }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead class="bg-gray-50"><tr><th class="px-4 py-2 text-left">Batch #</th><th class="px-4 py-2 text-left">Formula</th><th class="px-4 py-2 text-left">Date</th><th class="px-4 py-2 text-left">Parameters</th><th class="px-4 py-2 text-left">Status</th><th class="px-4 py-2 text-left">Tester</th></tr></thead><tbody>{% for test in recent_tests %}<tr class="border-t hover:bg-gray-50"><td class="px-4 py-2 font-medium font-mono">{{ test.batch_number }}</td><td class="px-4 py-2">{{ test.formula.code if test.formula else 'N/A' }}</td><td class="px-4 py-2">{{ test.test_date.strftime('%d-%b-%Y %H:%M') if test.test_date else '' }}</td><td class="px-4 py-2">{% if test.parameters %}<span class="text-xs text-gray-500">{{ test.parameters[:100] }}{% if test.parameters|length > 100 %}...{% endif %}</span>{% endif %}</td><td class="px-4 py-2">{% if test.status == 'pass' %}<span class="bg-green-100 text-green-800 px-2 py-1 rounded text-xs font-medium">✅ PASS</span>{% elif test.status == 'fail' %}<span class="bg-red-100 text-red-800 px-2 py-1 rounded text-xs font-medium">❌ FAIL</span>{% else %}<span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-xs font-medium">⏳ PENDING</span>{% endif %}</td><td class="px-4 py-2 text-gray-500">{{ test.tested_by }}</td></tr>{% endfor %}</tbody></table></div>
         {% else %}<div class="text-center py-8 text-gray-400"><p class="text-4xl mb-2">📋</p><p>No test results submitted yet</p></div>{% endif %}
     </div>
 </div>
@@ -189,9 +134,9 @@ var baseParams={'TEMPERATURE':{unit:'°C'},'BRIX':{unit:'°Bx'},'SALT':{unit:'%'
 var specsPaste={'TEMPERATURE':{min:60,max:85},'BRIX':{min:20,max:30},'SALT':{min:1,max:null,note:'Must be less than BRIX'},'%SALT':{min:null,max:null},'COLOUR':{min:1.5,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:3.6,max:4.5},'ACIDITY':{min:null,max:2.5},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:null}};
 var specsMix={'TEMPERATURE':{min:60,max:85},'BRIX':{min:13,max:21},'SALT':{min:1,max:null,note:'Must be less than BRIX'},'%SALT':{min:null,max:null},'COLOUR':{min:1.5,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:3.6,max:4.5},'ACIDITY':{min:null,max:2.5},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:null}};
 var specsOther={'TEMPERATURE':{min:null,max:null},'BRIX':{min:null,max:null},'SALT':{min:null,max:null},'%SALT':{min:null,max:null},'COLOUR':{min:null,max:null},'BRIGHTNESS':{min:null,max:null},'pH':{min:5.5,max:7.5},'ACIDITY':{min:null,max:null},'BOSTWICK':{min:null,max:null},'APPEARANCE':{min:null,max:null},'MOISTURE':{min:null,max:5.0}};
-var tpParams=['TEMPERATURE','BRIX','SALT','%SALT','COLOUR','BRIGHTNESS','pH','ACIDITY','BOSTWICK'],tmParams=['TEMPERATURE','BRIX','SALT','%SALT','COLOUR','BRIGHTNESS','pH','ACIDITY','BOSTWICK'],otParams=['APPEARANCE','pH','ACIDITY','MOISTURE'];
+var tpParams=['TEMPERATURE','BRIX','SALT','%SALT','COLOUR','BRIGHTNESS','pH','ACIDITY','BOSTWICK'],otParams=['APPEARANCE','pH','ACIDITY','MOISTURE'];
 function getSpecs(c){var t=getProductType(c);if(t==='paste')return specsPaste;if(t==='mix')return specsMix;return specsOther;}
-function getParamList(c){var t=getProductType(c);if(t==='paste')return tpParams;if(t==='mix')return tmParams;return otParams;}
+function getParamList(c){var t=getProductType(c);if(t==='paste'||t==='mix')return tpParams;return otParams;}
 function buildAllParams(c){var s=getSpecs(c),r={};for(var k in baseParams){if(baseParams.hasOwnProperty(k)){var bp=baseParams[k],sp=s[k]||{min:null,max:null};r[k]={name:k,unit:bp.unit,min:sp.min,max:sp.max,auto:bp.auto||false,note:sp.note||''};}}return r;}
 function getCurrentShift(){var h=new Date().getHours();return(h>=7&&h<19)?'A':'B';}
 function updateBatchPreview(){var s=document.getElementById('formulaSelect'),code=s.selectedIndex>0?s.options[s.selectedIndex].getAttribute('data-code'):'',input=document.getElementById('batchNumberInput'),hint=document.getElementById('batchFormatHint');if(!code){input.value='';hint.textContent='';return;}var now=new Date(),shift=getCurrentShift(),isTomato=allTomatoCodes.indexOf(code)!==-1;if(isTomato){input.value=String(now.getDate()).padStart(2,'0')+String(now.getMonth()+1).padStart(2,'0')+'-'+shift+'-XXX';hint.textContent='Format: DDMM-Shift-Seq';}else{input.value=String(now.getMonth()+1).padStart(2,'0')+String(now.getFullYear()).slice(-2)+'-'+shift+'-XXX';hint.textContent='Format: MMYY-Shift-Seq';}}
