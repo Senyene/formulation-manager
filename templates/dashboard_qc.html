@@ -162,6 +162,25 @@ var cc=['#3B82F6','#EF4444','#10B981','#F59E0B','#8B5CF6','#EC4899','#06B6D4','#
 function buildParamDropdown(){var set=new Set();allTests.forEach(function(t){var p=t.parameters;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){return}}if(p)p.forEach(function(x){if(x.name)set.add(x.name)})});var s=document.getElementById('trendParamFilter');s.innerHTML='<option value="all">All</option>';set.forEach(function(x){s.innerHTML+='<option value="'+x+'">'+x+'</option>'})}
 function updateTrendChart(){var ff=document.getElementById('trendFormulaFilter').value,pf=document.getElementById('trendParamFilter').value,ft=allTests;if(ff!=='all')ft=ft.filter(function(t){return t.formula_id==ff});var ds={};ft.forEach(function(t,i){var p=t.parameters;if(typeof p==='string'){try{p=JSON.parse(p)}catch(e){return}}if(!p)return;p.forEach(function(x){if(!x.name)return;if(pf!=='all'&&x.name!==pf)return;var v=parseFloat(x.result);if(isNaN(v))return;if(!ds[x.name]){ds[x.name]={label:x.name+(x.unit?' ('+x.unit+')':''),data:[],borderColor:cc[Object.keys(ds).length%cc.length],backgroundColor:cc[Object.keys(ds).length%cc.length]+'20',borderWidth:2,tension:0.3,fill:false,pointRadius:4,pointHoverRadius:6}}while(ds[x.name].data.length<i)ds[x.name].data.push(null);ds[x.name].data.push(v)})});var labels=ft.map(function(t){return t.batch});if(trendChart)trendChart.destroy();var ctx=document.getElementById('trendChart').getContext('2d'),arr=Object.values(ds);if(arr.length===0){ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);return}trendChart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:arr},options:{responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{position:'bottom',labels:{usePointStyle:true,padding:20,font:{size:11}}}},scales:{x:{title:{display:true,text:'Batch',font:{size:11}},ticks:{maxRotation:45,font:{size:10}}},y:{title:{display:true,text:'Result',font:{size:11}},beginAtZero:false,ticks:{font:{size:10}}}}}})}
 document.getElementById('worksheetModal').addEventListener('click',function(e){if(e.target===this)closeWorksheet()});
-document.addEventListener('DOMContentLoaded',function(){updateLiveClock();setInterval(updateLiveClock,1000);buildParamDropdown();if(allTests.length>0)updateTrendChart()});
+document.addEventListener('DOMContentLoaded',function(){
+    updateLiveClock();
+    setInterval(updateLiveClock,1000);
+    buildParamDropdown();
+    if(allTests.length>0)updateTrendChart();
+    
+    // Handle in-process testing button click - uncollapse the form
+    var ipLink = document.querySelector('a[href="#qc-form"]');
+    if(ipLink){
+        ipLink.addEventListener('click',function(e){
+            e.preventDefault();
+            var section = document.getElementById('qc-form');
+            if(section && section.classList.contains('section-collapsed')){
+                section.classList.remove('section-collapsed');
+                localStorage.setItem('section_qc-form-section','false');
+            }
+            section.scrollIntoView({behavior:'smooth'});
+        });
+    }
+});
 </script>
 {% endblock %}
