@@ -1038,60 +1038,78 @@ def shift_report():
     today = now.date()
     
     if request.method == 'POST':
-        sections = request.form.getlist('section[]')
-        mixing_plants = request.form.getlist('mixing_plant[]')
-        products = request.form.getlist('product[]')
-        filling_skus = request.form.getlist('filling_sku[]')
-        packaging_skus = request.form.getlist('packaging_sku[]')
-        pallets = request.form.getlist('total_pallets[]')
-        cartons = request.form.getlist('total_cartons[]')
         all_notes = request.form.get('notes', '').strip()[:1000]
         
-        if not sections:
-            flash('Please add at least one section entry.', 'error')
-            return redirect(url_for('shift_report'))
+        # Lab section - combine sample source data
+        lab_formulas = request.form.getlist('lab_sample_formula[]')
+        lab_sources = request.form.getlist('lab_sample_source[]')
+        lab_counts = request.form.getlist('lab_sample_count[]')
         
-        # Lab section data
-        lab_notes = request.form.get('lab_notes', '').strip()
+        lab_sample_parts = []
+        for i in range(len(lab_formulas)):
+            if lab_formulas[i]:
+                lab_sample_parts.append(
+                    f"{lab_formulas[i]} ({lab_sources[i] if i < len(lab_sources) else '?'})"
+                    f" x{safe_int(lab_counts[i]) if i < len(lab_counts) else 0}"
+                )
+        
         lab_report = EndOfShiftReport(
             shift=shift,
             report_date=today,
             section='Laboratory',
-            mixing_plant=request.form.get('lab_sample_source', ''),
+            mixing_plant=', '.join(lab_sample_parts) if lab_sample_parts else 'None',
             product='Calibration: pH=' + request.form.get('lab_ph_calibrated', '?') + 
                     ' Ref=' + request.form.get('lab_refracto_calibrated', '?') + 
                     ' Therm=' + request.form.get('lab_thermo_calibrated', '?') + 
                     ' Scale=' + request.form.get('lab_scale_calibrated', '?'),
-            filling_sku='Brix:' + request.form.get('lab_concentrate_brix', '?') + 
-                        ' pH:' + request.form.get('lab_concentrate_ph', '?'),
-            packaging_sku='Acid:' + request.form.get('lab_concentrate_acidity', '?') + 
-                          ' Bost:' + request.form.get('lab_concentrate_bostwick', '?'),
-            total_pallets=safe_int(request.form.get('lab_sample_count', 0)),
+            filling_sku='Concentrate: ' + request.form.get('lab_concentrate_done', '?'),
+            packaging_sku='',
+            total_pallets=0,
             total_cartons=0,
-            notes=lab_notes,
+            notes=request.form.get('lab_concentrate_notes', ''),
             submitted_by=current_user.display_name
         )
         db.session.add(lab_report)
         
-        # Production sections
-        for i in range(len(sections)):
-            report = EndOfShiftReport(
-                shift=shift,
-                report_date=today,
-                section=sections[i],
-                mixing_plant=mixing_plants[i] if i < len(mixing_plants) else '',
-                product=products[i] if i < len(products) else '',
-                filling_sku=filling_skus[i] if i < len(filling_skus) else '',
-                packaging_sku=packaging_skus[i] if i < len(packaging_skus) else '',
-                total_pallets=safe_int(pallets[i]) if i < len(pallets) else 0,
-                total_cartons=safe_int(cartons[i]) if i < len(cartons) else 0,
-                notes=all_notes,
-                submitted_by=current_user.display_name
-            )
-            db.session.add(report)
+        # Helper to save section rows
+        def save_section_rows(section_name, formula_field, filling_field, packaging_field, pallets_field, cartons_field):
+            formulas = request.form.getlist(formula_field)
+            fillings = request.form.getlist(filling_field)
+            packagings = request.form.getlist(packaging_field)
+            pallets = request.form.getlist(pallets_field)
+            cartons = request.form.getlist(cartons_field)
+            
+            for i in range(len(formulas)):
+                if formulas[i]:
+                    report = EndOfShiftReport(
+                        shift=shift,
+                        report_date=today,
+                        section=section_name,
+                        mixing_plant='',
+                        product=formulas[i],
+                        filling_sku=fillings[i] if i < len(fillings) else '',
+                        packaging_sku=packagings[i] if i < len(packagings) else '',
+                        total_pallets=safe_int(pallets[i]) if i < len(pallets) else 0,
+                        total_cartons=safe_int(cartons[i]) if i < len(cartons) else 0,
+                        notes=all_notes,
+                        submitted_by=current_user.display_name
+                    )
+                    db.session.add(report)
+        
+        # Dry section
+        save_section_rows('Dry', 'dry_formula[]', 'dry_filling_sku[]', 'dry_packaging_sku[]', 'dry_pallets[]', 'dry_cartons[]')
+        
+        # Cube section
+        save_section_rows('Cube', 'cube_formula[]', 'cube_packaging_sku[]', 'cube_packaging_sku[]', 'cube_pallets[]', 'cube_cartons[]')
+        
+        # Tin section
+        save_section_rows('Tin', 'tin_formula[]', 'tin_filling_sku[]', 'tin_packaging_sku[]', 'tin_pallets[]', 'tin_cartons[]')
+        
+        # Sachet & Pouch section
+        save_section_rows('Sachet_Pouch', 'sachet_formula[]', 'sachet_filling_sku[]', 'sachet_packaging_sku[]', 'sachet_pallets[]', 'sachet_cartons[]')
         
         db.session.commit()
-        log_action('SHIFT_REPORT', f'Shift: {shift}, Sections: {len(sections)}')
+        log_action('SHIFT_REPORT', f'Shift: {shift}')
         flash('End of shift report submitted!', 'success')
         return redirect(url_for('dashboard'))
     

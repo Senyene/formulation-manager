@@ -61,87 +61,111 @@
             
             <div class="mb-4">
                 <h3 class="text-sm font-semibold text-gray-700 mb-2">🧪 Concentrate / Process Check</h3>
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Brix</label><input type="text" name="lab_concentrate_brix" placeholder="°Bx" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate pH</label><input type="text" name="lab_concentrate_ph" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Acidity</label><input type="text" name="lab_concentrate_acidity" placeholder="%" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                    <div><label class="block text-xs text-gray-600 mb-1">Concentrate Bostwick</label><input type="text" name="lab_concentrate_bostwick" placeholder="cm" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <div>
+                    <label class="block text-xs text-gray-600 mb-1">Was concentrate/process check done?</label>
+                    <select name="lab_concentrate_done" class="w-full md:w-64 px-2 py-1.5 border rounded text-sm">
+                        <option value="">-- Select --</option>
+                        <option value="yes_satisfactory">✅ Yes - Results Satisfactory</option>
+                        <option value="yes_unsatisfactory">⚠️ Yes - Results Unsatisfactory</option>
+                        <option value="no">❌ Not Done</option>
+                    </select>
                 </div>
+                <div class="mt-2"><label class="block text-xs text-gray-600 mb-1">Notes</label><textarea name="lab_concentrate_notes" rows="2" placeholder="Details if unsatisfactory..." class="w-full px-2 py-1.5 border rounded text-sm"></textarea></div>
             </div>
             
             <div>
-                <h3 class="text-sm font-semibold text-gray-700 mb-2">📍 Sample Source</h3>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block text-xs text-gray-600 mb-1">Samples Brought From</label><select name="lab_sample_source" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="OTP">Old Tin Plant (OTP)</option><option value="NTP">New Tin Plant (NTP)</option><option value="Both">Both OTP & NTP</option></select></div>
-                    <div><label class="block text-xs text-gray-600 mb-1">Number of Samples</label><input type="number" name="lab_sample_count" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                <h3 class="text-sm font-semibold text-gray-700 mb-2">📍 Sample Source & Production Log</h3>
+                <p class="text-xs text-gray-400 mb-2">Track which formulas were produced and where samples came from during the shift.</p>
+                <div id="labSampleRows">
+                    <div class="lab-sample-row grid grid-cols-1 md:grid-cols-3 gap-2 mb-2 items-end">
+                        <div><label class="block text-xs text-gray-600 mb-1">Formula</label><select name="lab_sample_formula[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="F-021A">F-021A - Ric-giko Tomato Paste</option><option value="F-021B">F-021B - Tomagood Tomato Mix</option><option value="F-021C">F-021C - Erisco (Normal) Tomato Paste</option><option value="F-022">F-022 - Erisco Tomato Paste</option><option value="F-023">F-023 - Nagiko Tomato Mix</option><option value="F-024">F-024 - Erisco Party Jollof Tomato Paste</option><option value="F-025">F-025 - Erisco So Red Ketchup</option></select></div>
+                        <div><label class="block text-xs text-gray-600 mb-1">Sample Source</label><select name="lab_sample_source[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="OTP">Old Tin Plant (OTP)</option><option value="NTP">New Tin Plant (NTP)</option></select></div>
+                        <div class="flex gap-2 items-end">
+                            <div class="flex-1"><label class="block text-xs text-gray-600 mb-1">Samples Taken</label><input type="number" name="lab_sample_count[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                            <button type="button" onclick="removeLabSampleRow(this)" class="text-red-500 hover:text-red-700 text-sm mb-1">✕</button>
+                        </div>
+                    </div>
                 </div>
-                <div class="mt-2"><label class="block text-xs text-gray-600 mb-1">Lab Notes / Observations</label><textarea name="lab_notes" rows="2" placeholder="Any lab observations, equipment issues, or process notes..." class="w-full px-2 py-1.5 border rounded text-sm"></textarea></div>
+                <button type="button" onclick="addLabSampleRow()" class="text-blue-500 text-xs hover:underline mt-1">+ Add Another Formula</button>
             </div>
         </div>
         
         <!-- ============================================ -->
-        <!-- TIN SECTION                                  -->
+        <!-- DRY SECTION (F-001 to F-009)                 -->
         <!-- ============================================ -->
         <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🔧 Tin Section</h2>
-            <input type="hidden" name="section[]" value="Tin">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" placeholder="e.g., 400g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold flex items-center gap-2">🏭 Dry Section <span class="text-xs font-normal text-gray-400">(F-001 to F-009)</span></h2>
+                <button type="button" onclick="addProductRow('dryProducts')" class="text-blue-500 text-xs hover:underline">+ Add Product</button>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-            </div>
-        </div>
-        
-        <!-- Sachet & Pouch Section -->
-        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">📦 Sachet & Pouch Section</h2>
-            <input type="hidden" name="section[]" value="Sachet_Pouch">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" placeholder="e.g., 70g, 1100g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-            </div>
-        </div>
-        
-        <!-- Cube Section -->
-        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🧊 Cube Section</h2>
-            <input type="hidden" name="section[]" value="Cube">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-            </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-            </div>
-        </div>
-        
-        <!-- Dry Section -->
-        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">🏭 Dry Section</h2>
             <input type="hidden" name="section[]" value="Dry">
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Mixing Plant</label><input type="text" name="mixing_plant[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Product</label><input type="text" name="product[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="filling_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+            <div id="dryProducts">
+                <div class="product-row grid grid-cols-2 md:grid-cols-5 gap-3 mb-3 items-end">
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Formula</label><select name="dry_formula[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="F-001">F-001 - Garri Mix 3in1</option><option value="F-002">F-002 - Ricvita</option><option value="F-003">F-003 - Milk Tea</option><option value="F-004">F-004 - Coffee Mix</option><option value="F-005">F-005 - Milk Powder</option><option value="F-006">F-006 - Garri Chocolate Mix</option><option value="F-007">F-007 - Wheat Flour</option><option value="F-008">F-008 - Rice Flour</option><option value="F-009">F-009 - Ginger with Honey Tea</option></select></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="dry_filling_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="dry_packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Pallets</label><input type="number" name="dry_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Cartons</label><input type="number" name="dry_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
             </div>
-            <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Pallets</label><input type="number" name="total_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
-                <div><label class="block text-xs font-medium text-gray-700 mb-1">Total Cartons</label><input type="number" name="total_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- CUBE SECTION (F-010 to F-020)                -->
+        <!-- ============================================ -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold flex items-center gap-2">🧊 Cube Section <span class="text-xs font-normal text-gray-400">(F-010 to F-020)</span></h2>
+                <button type="button" onclick="addProductRow('cubeProducts')" class="text-blue-500 text-xs hover:underline">+ Add Product</button>
+            </div>
+            <input type="hidden" name="section[]" value="Cube">
+            <div id="cubeProducts">
+                <div class="product-row grid grid-cols-2 md:grid-cols-4 gap-3 mb-3 items-end">
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Formula</label><select name="cube_formula[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="F-010">F-010 - Chicken Flavor Seasoning</option><option value="F-011">F-011 - Beef Flavor Seasoning</option><option value="F-012">F-012 - Sea Food Flavor Seasoning</option><option value="F-013">F-013 - Curry Flavor Seasoning</option><option value="F-014">F-014 - Onion Flavor Seasoning</option><option value="F-015">F-015 - Tomato Flavor Seasoning</option><option value="F-016">F-016 - Milk Cubes</option><option value="F-017">F-017 - Chocolate Cubes</option><option value="F-018">F-018 - Mixed Fruits Cubes</option><option value="F-019">F-019 - Strawberry Cubes</option><option value="F-020">F-020 - Vanilla Cubes</option></select></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="cube_packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Pallets</label><input type="number" name="cube_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Cartons</label><input type="number" name="cube_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- TIN SECTION (F-021 to F-025)                 -->
+        <!-- ============================================ -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold flex items-center gap-2">🔧 Tin Section <span class="text-xs font-normal text-gray-400">(F-021 to F-025)</span></h2>
+                <button type="button" onclick="addProductRow('tinProducts')" class="text-blue-500 text-xs hover:underline">+ Add Product</button>
+            </div>
+            <input type="hidden" name="section[]" value="Tin">
+            <div id="tinProducts">
+                <div class="product-row grid grid-cols-2 md:grid-cols-5 gap-3 mb-3 items-end">
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Formula</label><select name="tin_formula[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="F-021A">F-021A - Ric-giko</option><option value="F-021B">F-021B - Tomagood Mix</option><option value="F-021C">F-021C - Erisco (Normal)</option><option value="F-022">F-022 - Erisco</option><option value="F-023">F-023 - Nagiko Mix</option><option value="F-024">F-024 - Party Jollof</option><option value="F-025">F-025 - So Red Ketchup</option></select></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="tin_filling_sku[]" placeholder="e.g., 400g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="tin_packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Pallets</label><input type="number" name="tin_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Cartons</label><input type="number" name="tin_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- ============================================ -->
+        <!-- SACHET & POUCH SECTION (F-021 to F-025)     -->
+        <!-- ============================================ -->
+        <div class="bg-white rounded-lg shadow p-6 mb-4 shift-section">
+            <div class="flex justify-between items-center mb-3">
+                <h2 class="text-lg font-bold flex items-center gap-2">📦 Sachet & Pouch Section <span class="text-xs font-normal text-gray-400">(F-021 to F-025)</span></h2>
+                <button type="button" onclick="addProductRow('sachetProducts')" class="text-blue-500 text-xs hover:underline">+ Add Product</button>
+            </div>
+            <input type="hidden" name="section[]" value="Sachet_Pouch">
+            <div id="sachetProducts">
+                <div class="product-row grid grid-cols-2 md:grid-cols-5 gap-3 mb-3 items-end">
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Formula</label><select name="sachet_formula[]" class="w-full px-2 py-1.5 border rounded text-sm"><option value="">-- Select --</option><option value="F-021A">F-021A - Ric-giko</option><option value="F-021B">F-021B - Tomagood Mix</option><option value="F-021C">F-021C - Erisco (Normal)</option><option value="F-022">F-022 - Erisco</option><option value="F-023">F-023 - Nagiko Mix</option><option value="F-024">F-024 - Party Jollof</option><option value="F-025">F-025 - So Red Ketchup</option></select></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Filling SKU</label><input type="text" name="sachet_filling_sku[]" placeholder="e.g., 70g, 1100g" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Packaging SKU</label><input type="text" name="sachet_packaging_sku[]" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Pallets</label><input type="number" name="sachet_pallets[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                    <div><label class="block text-xs font-medium text-gray-700 mb-1">Cartons</label><input type="number" name="sachet_cartons[]" value="0" min="0" class="w-full px-2 py-1.5 border rounded text-sm"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -162,12 +186,62 @@
 function getCurrentShift(){var h=new Date().getHours();return(h>=7&&h<19)?'A':'B';}
 function updateClock(){var now=new Date();document.getElementById('liveClock').textContent=String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0')+':'+String(now.getSeconds()).padStart(2,'0');var shift=getCurrentShift(),el=document.getElementById('currentShift');el.textContent='SHIFT '+shift;el.className='text-xs px-2 py-1 rounded font-medium '+(shift==='A'?'bg-blue-100 text-blue-800':'bg-indigo-100 text-indigo-800');}
 
+// Add product row to sections
+function addProductRow(containerId){
+    var container=document.getElementById(containerId);
+    var template=container.querySelector('.product-row');
+    if(!template)return;
+    var clone=template.cloneNode(true);
+    // Clear values in cloned row
+    clone.querySelectorAll('input').forEach(function(i){i.value='';if(i.type==='number')i.value='0';});
+    clone.querySelectorAll('select').forEach(function(s){s.selectedIndex=0;});
+    // Add remove button
+    var lastDiv=clone.querySelectorAll('div')[clone.querySelectorAll('div').length-1];
+    var removeBtn=document.createElement('button');
+    removeBtn.type='button';
+    removeBtn.className='text-red-500 hover:text-red-700 text-xs ml-2';
+    removeBtn.textContent='✕';
+    removeBtn.onclick=function(){this.closest('.product-row').remove();};
+    // Wrap in flex
+    var wrapper=document.createElement('div');
+    wrapper.style.display='flex';
+    wrapper.style.alignItems='end';
+    wrapper.style.gap='4px';
+    lastDiv.parentNode.insertBefore(wrapper,lastDiv);
+    wrapper.appendChild(lastDiv);
+    wrapper.appendChild(removeBtn);
+    container.appendChild(clone);
+}
+
+// Add lab sample row
+function addLabSampleRow(){
+    var container=document.getElementById('labSampleRows');
+    var template=container.querySelector('.lab-sample-row');
+    if(!template)return;
+    var clone=template.cloneNode(true);
+    clone.querySelectorAll('input').forEach(function(i){i.value='';if(i.type==='number')i.value='0';});
+    clone.querySelectorAll('select').forEach(function(s){s.selectedIndex=0;});
+    container.appendChild(clone);
+}
+
+function removeLabSampleRow(btn){
+    var rows=document.getElementById('labSampleRows').querySelectorAll('.lab-sample-row');
+    if(rows.length>1)btn.closest('.lab-sample-row').remove();
+}
+
+// DRAFT SAVE / LOAD
 function saveDraft(){
     var draft={};
-    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_brix','lab_concentrate_ph','lab_concentrate_acidity','lab_concentrate_bostwick','lab_sample_source','lab_sample_count','lab_notes'].forEach(function(n){
+    // Lab section
+    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_done','lab_concentrate_notes'].forEach(function(n){
         var el=document.querySelector('[name="'+n+'"]');if(el)draft[n]=el.value;
     });
-    ['section[]','mixing_plant[]','product[]','filling_sku[]','packaging_sku[]','total_pallets[]','total_cartons[]'].forEach(function(n){
+    // Lab sample rows
+    ['lab_sample_formula[]','lab_sample_source[]','lab_sample_count[]'].forEach(function(n){
+        var els=document.querySelectorAll('[name="'+n+'"]');draft[n]=[];els.forEach(function(e){draft[n].push(e.value);});
+    });
+    // Section product rows
+    ['dry_formula[]','dry_filling_sku[]','dry_packaging_sku[]','dry_pallets[]','dry_cartons[]','cube_formula[]','cube_packaging_sku[]','cube_pallets[]','cube_cartons[]','tin_formula[]','tin_filling_sku[]','tin_packaging_sku[]','tin_pallets[]','tin_cartons[]','sachet_formula[]','sachet_filling_sku[]','sachet_packaging_sku[]','sachet_pallets[]','sachet_cartons[]'].forEach(function(n){
         var els=document.querySelectorAll('[name="'+n+'"]');draft[n]=[];els.forEach(function(e){draft[n].push(e.value);});
     });
     draft['notes']=document.getElementById('generalNotes').value;
@@ -182,14 +256,16 @@ function saveDraft(){
 function loadDraft(){
     var key='shift_report_draft_'+getCurrentShift()+'_'+new Date().toISOString().split('T')[0];
     var raw=localStorage.getItem(key);
-    if(!raw){alert('No draft found for this shift.');return;}
-    if(!confirm('Load saved draft? Current entries will be replaced.'))return;
+    if(!raw){alert('No draft found.');return;}
+    if(!confirm('Load saved draft?'))return;
     var draft=JSON.parse(raw);
-    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_brix','lab_concentrate_ph','lab_concentrate_acidity','lab_concentrate_bostwick','lab_sample_source','lab_sample_count','lab_notes'].forEach(function(n){
+    ['lab_ph_calibrated','lab_refracto_calibrated','lab_thermo_calibrated','lab_scale_calibrated','lab_concentrate_done','lab_concentrate_notes'].forEach(function(n){
         var el=document.querySelector('[name="'+n+'"]');if(el&&draft[n]!==undefined)el.value=draft[n];
     });
-    ['section[]','mixing_plant[]','product[]','filling_sku[]','packaging_sku[]','total_pallets[]','total_cartons[]'].forEach(function(n){
-        var els=document.querySelectorAll('[name="'+n+'"]');if(draft[n]){els.forEach(function(e,i){if(draft[n][i]!==undefined)e.value=draft[n][i];});}
+    // Restore arrays - need to ensure enough rows exist
+    var allArrays=['lab_sample_formula[]','lab_sample_source[]','lab_sample_count[]','dry_formula[]','dry_filling_sku[]','dry_packaging_sku[]','dry_pallets[]','dry_cartons[]','cube_formula[]','cube_packaging_sku[]','cube_pallets[]','cube_cartons[]','tin_formula[]','tin_filling_sku[]','tin_packaging_sku[]','tin_pallets[]','tin_cartons[]','sachet_formula[]','sachet_filling_sku[]','sachet_packaging_sku[]','sachet_pallets[]','sachet_cartons[]'];
+    allArrays.forEach(function(n){
+        var els=document.querySelectorAll('[name="'+n+'"]');if(draft[n]&&draft[n].length>0){els.forEach(function(e,i){if(draft[n][i]!==undefined)e.value=draft[n][i];});}
     });
     if(draft['notes']!==undefined)document.getElementById('generalNotes').value=draft['notes'];
     document.getElementById('draftStatus').textContent='📂 Draft loaded';
